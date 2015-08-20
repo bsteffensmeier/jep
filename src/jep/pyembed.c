@@ -69,8 +69,12 @@
 // End additional includes for python2.3
 
 #include "pyembed.h"
-#include "pyjobject.h"
+#include "pyjtype.h"
+#include "pyjobject2.h"
+#include "primitives/pyjprimitives.h"
+#include "pyjstring.h"
 #include "pyjarray.h"
+#include "pyjconverter.h"
 #include "util.h"
 
 
@@ -85,7 +89,6 @@ char **environ = NULL;
 
 static PyThreadState *mainThreadState = NULL;
 
-static PyObject* pyembed_findclass(PyObject*, PyObject*);
 static PyObject* pyembed_forname(PyObject*, PyObject*);
 static PyObject* pyembed_set_print_stack(PyObject*, PyObject*);
 static PyObject* pyembed_jproxy(PyObject*, PyObject*);
@@ -94,49 +97,20 @@ static int maybe_pyc_file(FILE*, const char*, const char*, int);
 static void pyembed_run_pyc(JepThread *jepThread, FILE *);
 
 
-// ClassLoader.loadClass
-static jmethodID loadClassMethod = 0;
 
 // jep.Proxy.newProxyInstance
 static jmethodID newProxyMethod = 0;
 
-// Integer(int)
-static jmethodID integerIConstructor = 0;
-
-// Long(long)
-static jmethodID longJConstructor = 0;
-
-// Float(float)
-static jmethodID floatFConstructor = 0;
-
-// Boolean(boolean)
-static jmethodID booleanBConstructor = 0;
-
-// ArrayList(int)
-static jmethodID arraylistIConstructor = 0;
-static jmethodID arraylistAdd = 0;
-
 static struct PyMethodDef jep_methods[] = {
     { "findClass",
-      pyembed_findclass,
+      pyembed_forname,
       METH_VARARGS,
       "Find and instantiate a system class, somewhat faster than forName." },
-    
+
     { "forName",
       pyembed_forname,
       METH_VARARGS,
       "Find and return a jclass object using the supplied ClassLoader." },
-
-    { "jarray",
-      pyjarray_new_v,
-      METH_VARARGS,
-      "Create a new primitive array in Java.\n"
-      "Accepts:\n"
-      "(size, type _ID, [0]) || "
-      "(size, JCHAR_ID, [string value] || "
-      "(size, jobject) || "
-      "(size, str) || "
-      "(size, jarray)" },
 
     { "printStack",
       pyembed_set_print_stack,
@@ -225,6 +199,12 @@ intptr_t pyembed_thread_init(JNIEnv *env, jobject cl, jobject caller) {
     
     PyEval_AcquireLock();
     Py_NewInterpreter();
+    PyJType_Init(env);
+    PyJConverter_Init();
+    PyJInt_Init();
+    PyJBoolean_Init();
+    PyJString_Init();
+    PyJArray_Init();
     
     jepThread = PyMem_Malloc(sizeof(JepThread));
     if(!jepThread) {
@@ -334,10 +314,8 @@ void pyembed_thread_close(intptr_t _jepThread) {
 JNIEnv* pyembed_get_env(void) {
     JavaVM *jvm;
     JNIEnv *env;
-
     JNI_GetCreatedJavaVMs(&jvm, 1, NULL);
     (*jvm)->AttachCurrentThread(jvm, (void**) &env, NULL);
-
     return env;
 }
 
@@ -360,31 +338,6 @@ JepThread* pyembed_get_jepthread(void) {
     return ret;
 }
 
-
-// used by _forname
-#define LOAD_CLASS_METHOD(env, cl)                                          \
-{                                                                           \
-    if(loadClassMethod == 0) {                                              \
-        jobject clazz;                                                      \
-                                                                            \
-        clazz = (*env)->GetObjectClass(env, cl);                            \
-        if(process_java_exception(env) || !clazz)                           \
-            return NULL;                                                    \
-                                                                            \
-        loadClassMethod =                                                   \
-            (*env)->GetMethodID(env,                                        \
-                                clazz,                                      \
-                                "loadClass",                                \
-                                "(Ljava/lang/String;)Ljava/lang/Class;");   \
-                                                                            \
-        if(process_java_exception(env) || !loadClassMethod) {               \
-            (*env)->DeleteLocalRef(env, clazz);                             \
-            return NULL;                                                    \
-        }                                                                   \
-                                                                            \
-        (*env)->DeleteLocalRef(env, clazz);                                 \
-    }                                                                       \
-}
 
 
 static PyObject* pyembed_jproxy(PyObject *self, PyObject *args) {
@@ -474,7 +427,8 @@ static PyObject* pyembed_jproxy(PyObject *self, PyObject *args) {
     // make sure target doesn't get garbage collected
     Py_INCREF(pytarget);
 
-    return pyjobject_new(env, proxy);
+    // TODO this is broken
+    return NULL;//pyjobject_new(env, proxy);
 }
 
 
@@ -501,77 +455,22 @@ static PyObject* pyembed_set_print_stack(PyObject *self, PyObject *args) {
     return Py_None;
 }
 
-
 static PyObject* pyembed_forname(PyObject *self, PyObject *args) {
-    JNIEnv    *env       = NULL;
-    char      *name;
-    jobject    cl;
-    jclass     objclazz;
-    jstring    jstr;
+    JNIEnv *env = NULL;
+    char *name;
     JepThread *jepThread;
-
-    if(!PyArg_ParseTuple(args, "s", &name))
+    if(!PyArg_ParseTuple(args, "s", &name)){
         return NULL;
-    
+    }
     jepThread = pyembed_get_jepthread();
     if(!jepThread) {
         if(!PyErr_Occurred())
             PyErr_SetString(PyExc_RuntimeError, "Invalid JepThread pointer.");
         return NULL;
     }
-    
     env = jepThread->env;
-    cl  = jepThread->classloader;
-    
-    LOAD_CLASS_METHOD(env, cl);
-    
-    jstr = (*env)->NewStringUTF(env, (const char *) name);
-    if(process_java_exception(env) || !jstr)
-        return NULL;
-    
-    objclazz = (jclass) (*env)->CallObjectMethod(env,
-                                                 cl,
-                                                 loadClassMethod,
-                                                 jstr);
-    if(process_java_exception(env) || !objclazz)
-        return NULL;
-    
-    return (PyObject *) pyjobject_new_class(env, objclazz);
+    return PyJType_FromName(env, name);
 }
-
-
-static PyObject* pyembed_findclass(PyObject *self, PyObject *args) {
-    JNIEnv    *env       = NULL;
-    char      *name, *p;
-    jclass     clazz;
-    JepThread *jepThread;
-    
-    if(!PyArg_ParseTuple(args, "s", &name))
-        return NULL;
-    
-    jepThread = pyembed_get_jepthread();
-    if(!jepThread) {
-        if(!PyErr_Occurred())
-            PyErr_SetString(PyExc_RuntimeError, "Invalid JepThread pointer.");
-        return NULL;
-    }
-    
-    env = jepThread->env;
-    
-    // replace '.' with '/'
-    // i'm told this is okay to do with unicode.
-    for(p = name; *p != '\0'; p++) {
-        if(*p == '.')
-            *p = '/';
-    }
-    
-    clazz = (*env)->FindClass(env, name);
-    if(process_java_exception(env))
-        return NULL;
-    
-    return (PyObject *) pyjobject_new_class(env, clazz);
-}
-
 
 jobject pyembed_invoke_method(JNIEnv *env,
                               intptr_t _jepThread,
@@ -907,233 +806,6 @@ void pyembed_setloader(JNIEnv *env, intptr_t _jepThread, jobject cl) {
     
     jepThread->classloader = (*env)->NewGlobalRef(env, cl);
 }
-
-
-// convert pyobject to boxed java value
-jobject pyembed_box_py(JNIEnv *env, PyObject *result) {
-
-    if(result == Py_None) {
-        /*
-         * To ensure we get back a Java null instead of the word "None", we
-         * return NULL in this case.  All the other return NULLs below will
-         * set the error indicator which should be checked for and handled by
-         * code calling pyembed_box_py.
-         */
-        return NULL;
-    }
-
-    // class and object need to return a new local ref so the object
-    // isn't garbage collected.
-    if(pyjclass_check(result))
-        return (*env)->NewLocalRef(env, ((PyJobject_Object *) result)->clazz);
-
-    if(pyjobject_check(result))
-        return (*env)->NewLocalRef(env, ((PyJobject_Object *) result)->object);
-
-    if(PyString_Check(result)) {
-        char *s = PyString_AS_STRING(result);
-        return (*env)->NewStringUTF(env, (const char *) s);
-    }
-
-    if(PyBool_Check(result)) {
-        jclass clazz;
-        jboolean b = JNI_FALSE;
-        if(result == Py_True)
-            b = JNI_TRUE;
-
-        clazz = (*env)->FindClass(env, "java/lang/Boolean");
-
-        if(booleanBConstructor == 0) {
-            booleanBConstructor = (*env)->GetMethodID(env,
-                                                      clazz,
-                                                      "<init>",
-                                                      "(Z)V");
-        }
-
-        if(!process_java_exception(env) && booleanBConstructor)
-            return (*env)->NewObject(env, clazz, booleanBConstructor, b);
-        else
-            return NULL;
-    }
-
-    if(PyInt_Check(result)) {
-        jclass clazz;
-        jint i = (jint) PyInt_AS_LONG(result);
-
-        clazz = (*env)->FindClass(env, "java/lang/Integer");
-
-        if(integerIConstructor == 0) {
-            integerIConstructor = (*env)->GetMethodID(env,
-                                                      clazz,
-                                                      "<init>",
-                                                      "(I)V");
-        }
-
-        if(!process_java_exception(env) && integerIConstructor)
-            return (*env)->NewObject(env, clazz, integerIConstructor, i);
-        else
-            return NULL;
-    }
-
-    if(PyLong_Check(result)) {
-        jclass clazz;
-        jeplong i = PyLong_AsLongLong(result);
-
-        clazz = (*env)->FindClass(env, "java/lang/Long");
-
-        if(longJConstructor == 0) {
-            longJConstructor = (*env)->GetMethodID(env,
-                                                   clazz,
-                                                   "<init>",
-                                                   "(J)V");
-        }
-
-        if(!process_java_exception(env) && longJConstructor)
-            return (*env)->NewObject(env, clazz, longJConstructor, i);
-        else
-            return NULL;
-    }
-
-    if(PyFloat_Check(result)) {
-        jclass clazz;
-
-        // causes precision loss. python's float type sucks. *shrugs*
-        jfloat f = (jfloat) PyFloat_AS_DOUBLE(result);
-
-        clazz = (*env)->FindClass(env, "java/lang/Float");
-
-        if(floatFConstructor == 0) {
-            floatFConstructor = (*env)->GetMethodID(env,
-                                                    clazz,
-                                                    "<init>",
-                                                    "(F)V");
-        }
-
-        if(!process_java_exception(env) && floatFConstructor)
-            return (*env)->NewObject(env, clazz, floatFConstructor, f);
-        else
-            return NULL;
-    }
-
-    if(pyjarray_check(result)) {
-        PyJarray_Object *t = (PyJarray_Object *) result;
-        pyjarray_release_pinned(t, JNI_COMMIT);
-
-        return t->object;
-    }
-
-    if(PyList_Check(result) || PyTuple_Check(result)) {
-        jclass clazz;
-        int modifiable = PyList_Check(result);
-
-        clazz = (*env)->FindClass(env, "java/util/ArrayList");
-        if(arraylistIConstructor == 0) {
-            arraylistIConstructor = (*env)->GetMethodID(env,
-                                                    clazz,
-                                                    "<init>",
-                                                    "(I)V");
-        }
-        if(arraylistAdd == 0) {
-            arraylistAdd = (*env)->GetMethodID(env,
-                                               clazz,
-                                               "add",
-                                               "(Ljava/lang/Object;)Z");
-        }
-
-        if(!process_java_exception(env) && arraylistIConstructor && arraylistAdd) {
-            jobject list;
-            Py_ssize_t i;
-            Py_ssize_t size;
-
-            if(modifiable) {
-                size = PyList_Size(result);
-            } else {
-                size = PyTuple_Size(result);
-            }
-            list = (*env)->NewObject(env, clazz, arraylistIConstructor, (int) size);
-            if(process_java_exception(env) || !list) {
-                return NULL;
-            }
-
-            for(i=0; i < size; i++) {
-                PyObject *item;
-                jobject value;
-
-                if(modifiable) {
-                    item = PyList_GetItem(result, i);
-                } else {
-                    item = PyTuple_GetItem(result, i);
-                }
-                value = pyembed_box_py(env, item);
-                if(value == NULL && PyErr_Occurred()) {
-                    /*
-                     * java exceptions will have been transformed to python
-                     * exceptions by this point
-                     */
-                    (*env)->DeleteLocalRef(env, list);
-                    return NULL;
-                }
-                (*env)->CallBooleanMethod(env, list, arraylistAdd, value);
-                if(process_java_exception(env)) {
-                    (*env)->DeleteLocalRef(env, list);
-                    return NULL;
-                }
-            }
-
-            if(modifiable) {
-                return list;
-            } else {
-                // make the tuple unmodifiable in Java
-                jclass collections;
-                jmethodID unmodifiableList;
-
-                collections = (*env)->FindClass(env, "java/util/Collections");
-                if(process_java_exception(env) || !collections) {
-                    return NULL;
-                }
-
-                unmodifiableList = (*env)->GetStaticMethodID(env,
-                                                             collections,
-                                                             "unmodifiableList",
-                                                             "(Ljava/util/List;)Ljava/util/List;");
-                if(process_java_exception(env) || !unmodifiableList) {
-                    return NULL;
-                }
-                list = (*env)->CallStaticObjectMethod(env,
-                                                      collections,
-                                                      unmodifiableList,
-                                                      list);
-                if(process_java_exception(env) || !list) {
-                    return NULL;
-                }
-                return list;
-            }
-        }
-        else {
-            return NULL;
-        }
-    } // end of list and tuple conversion
-
-#if USE_NUMPY
-    if(npy_array_check(result)) {
-        return convert_pyndarray_jndarray(env, result);
-    }
-#endif
-
-    // TODO find a better solution than this
-    // convert everything else to string
-    {
-        jobject ret;
-        char *tt;
-        PyObject *t = PyObject_Str(result);
-        tt = PyString_AsString(t);
-        ret = (jobject) (*env)->NewStringUTF(env, (const char *) tt);
-        Py_DECREF(t);
-
-        return ret;
-    }
-}
-
 
 jobject pyembed_getvalue_on(JNIEnv *env,
                             intptr_t _jepThread,
@@ -1492,13 +1164,12 @@ void pyembed_setparameter_object(JNIEnv *env,
     
     // does common things
     GET_COMMON;
-    
     if(value == NULL) {
         Py_INCREF(Py_None);
         pyjob = Py_None;
     }
     else
-        pyjob = pyjobject_new(env, value);
+        pyjob = PyJObject2_jtopy(env, value);
     
     if(pyjob) {
         if(pymodule == NULL) {
@@ -1539,7 +1210,7 @@ void pyembed_setparameter_array(JNIEnv *env,
         pyjob = Py_None;
     }
     else
-        pyjob = pyjarray_new(env, obj);
+        pyjob = PyJObject2_jtopy(env, obj);
     
     if(pyjob) {
         if(pymodule == NULL) {
@@ -1580,8 +1251,7 @@ void pyembed_setparameter_class(JNIEnv *env,
         pyjob = Py_None;
     }
     else
-        pyjob = pyjobject_new_class(env, value);
-    
+        pyjob = PyJType_jtopy(env, value);
     if(pyjob) {
         if(pymodule == NULL) {
             PyObject *key = PyString_FromString(name);
@@ -1655,7 +1325,7 @@ void pyembed_setparameter_int(JNIEnv *env,
     // does common things
     GET_COMMON;
     
-    if((pyvalue = Py_BuildValue("i", value)) == NULL) {
+    if((pyvalue = PyJInt_jtopy(env, value)) == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Out of memory.");
         return;
     }
@@ -1692,7 +1362,7 @@ void pyembed_setparameter_long(JNIEnv *env,
     // does common things
     GET_COMMON;
     
-    if((pyvalue = PyLong_FromLongLong(value)) == NULL) {
+    if((pyvalue = PyJLong_jtopy(env, value)) == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Out of memory.");
         return;
     }
@@ -1729,7 +1399,7 @@ void pyembed_setparameter_double(JNIEnv *env,
     // does common things
     GET_COMMON;
     
-    if((pyvalue = PyFloat_FromDouble(value)) == NULL) {
+    if((pyvalue = PyJDouble_jtopy(env, value)) == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Out of memory.");
         return;
     }
@@ -1766,7 +1436,7 @@ void pyembed_setparameter_float(JNIEnv *env,
     // does common things
     GET_COMMON;
     
-    if((pyvalue = PyFloat_FromDouble((double) value)) == NULL) {
+    if((pyvalue = PyJFloat_jtopy(env, value)) == NULL) {
         PyErr_SetString(PyExc_MemoryError, "Out of memory.");
         return;
     }

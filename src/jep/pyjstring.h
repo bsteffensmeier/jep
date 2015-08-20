@@ -28,9 +28,9 @@
 
 #include <Python.h>
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#ifndef _Included_pyjstring
+#define _Included_pyjstring
 
-PyAPI_FUNC(void) PyJArray_Init(void);
+PyAPI_FUNC(void) PyJString_Init(void);
 
-#endif // ndef pyjarray
+#endif // ndef pyjstring

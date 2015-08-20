@@ -2,7 +2,7 @@
 /* 
    jep - Java Embedded Python
 
-   Copyright (c) 2015 JEP AUTHORS.
+   Copyright (c) 2004 - 2011 Mike Johnson.
 
    This file is licenced under the the zlib/libpng License.
 
@@ -24,7 +24,7 @@
 
    3. This notice may not be removed or altered from any source
    distribution.   
-*/
+*/ 	
 
 
 // shut up the compiler
@@ -34,34 +34,38 @@
 #include <jni.h>
 #include <Python.h>
 
-#ifndef _Included_pyjfield
-#define _Included_pyjfield
+#ifndef _Included_pyjmethod2
+#define _Included_pyjmethod2
 
-#include "pyjobject.h"
-#include "pyjclass.h"
+#include "pyjtype.h"
 
-// i needed an object to store methods in. this is a callable
-// object and instances of these are dynamically added to a PyJobject
-// using setattr.
+/*
+ * Called by PyJType_Init, not by anyone else.
+ */
+int _PyJMethod2_Init(JNIEnv*);
+
+typedef struct jReflectMethodListNode_ {
+  jobject reflect_method;
+  struct jReflectMethodListNode_* next;
+} jReflectMethodListNode;
+
+typedef struct jmethodListNode_ {
+  jmethodID method;
+  PyJTypeObject* returnType;
+  PyJTypeObject** parameterTypes;
+  struct jmethodListNode_* next;
+} jmethodListNode;
 
 typedef struct {
     PyObject_HEAD
-    jfieldID          fieldId;             /* Resolved fieldid */
-    jobject           rfield;              /* reflect/Field object */
-    PyJobject_Object *pyjobject;           /* parent, should point to
-                                              PyJObject_Object */
-    int               fieldTypeId;         /* field's typeid */
-    PyObject         *pyFieldName;         /* python name... :-) */
-    int               isStatic;            /* -1 if not known,
-                                              otherwise 1 or 0 */
-    int               init;                /* 1 if init performed */
-} PyJfield_Object;
+    int initialized;
+    PyObject* name;
+    jReflectMethodListNode* relfectMethodList;
+    jmethodListNode* methodList[10];
+} PyJMethod2_Object;
 
+PyAPI_DATA(PyJTypeObject) PyJMethod2_Type;
+PyAPI_FUNC(int) pyjmethod2_init_jni_globals(JNIEnv*);
+PyAPI_FUNC(int) PyJMethod2_Get_Methods(JNIEnv*, jclass, PyObject*);
 
-PyJfield_Object* pyjfield_new(JNIEnv*, jobject, PyJobject_Object*);
-int pyjfield_check(PyObject*);
-
-PyObject* pyjfield_get(PyJfield_Object*);
-int pyjfield_set(PyJfield_Object *self, PyObject *value);
-
-#endif // ndef pyjfield
+#endif // ndef pyjmethod2

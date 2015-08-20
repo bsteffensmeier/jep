@@ -2,7 +2,7 @@
 /* 
    jep - Java Embedded Python
 
-   Copyright (c) 2015 JEP AUTHORS.
+   Copyright (c) 2004 - 2015 AUTHORS.
 
    This file is licenced under the the zlib/libpng License.
 
@@ -24,28 +24,20 @@
 
    3. This notice may not be removed or altered from any source
    distribution.   
-*/
+*/ 	
 
-// shut up the compiler
-#ifdef _POSIX_C_SOURCE
-#  undef _POSIX_C_SOURCE
-#endif
-#include <jni.h>
+
 #include <Python.h>
+#include <jni.h>
 
-#ifndef _Included_pyjclass
-#define _Included_pyjclass
+#ifndef _Included_pyjfloat
+#define _Included_pyjfloat
 
-typedef struct {
-    PyObject_HEAD
-    jobjectArray      initArray;    /* constructor array */
-    int               initLen;      /* length of initArray */
-    PyObject         *pyjobject;    /* pointer to parent */
-    int              *numArgsPerInit; /* pointer to init arg count */
-} PyJclass_Object;
+PyAPI_FUNC(void) PyJFloat_Init(void);
 
-PyJclass_Object* pyjclass_new(JNIEnv*, PyObject*);
-PyObject* pyjclass_call(PyJclass_Object*, PyObject*, PyObject*);
-int pyjclass_check(PyObject*);
+/*
+ * Convert a java float to a python object of the appropriate type.
+ */
+PyAPI_FUNC(PyObject*) PyJFloat_jtopy(JNIEnv*, jfloat);
 
-#endif // ndef pyjclass
+#endif // ndef pyjfloat

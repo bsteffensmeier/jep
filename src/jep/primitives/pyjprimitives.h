@@ -26,11 +26,10 @@
    distribution.   
 */ 	
 
-#include <Python.h>
-
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
-
-PyAPI_FUNC(void) PyJArray_Init(void);
-
-#endif // ndef pyjarray
+#include "pyjlong.h"
+#include "pyjint.h"
+#include "pyjshort.h"
+#include "pyjbyte.h"
+#include "pyjboolean.h"
+#include "pyjfloat.h"
+#include "pyjdouble.h"

@@ -26,11 +26,18 @@
    distribution.   
 */ 	
 
+
 #include <Python.h>
+#include <jni.h>
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#ifndef _Included_pyjshort
+#define _Included_pyjshort
 
-PyAPI_FUNC(void) PyJArray_Init(void);
+PyAPI_FUNC(void) PyJShort_Init(void);
 
-#endif // ndef pyjarray
+/*
+ * Convert a java short to a python object of the appropriate type.
+ */
+PyAPI_FUNC(PyObject*) PyJShort_jtopy(JNIEnv*, jshort);
+
+#endif // ndef pyjshort

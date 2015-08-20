@@ -26,11 +26,18 @@
    distribution.   
 */ 	
 
+
 #include <Python.h>
+#include <jni.h>
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#ifndef _Included_pyjint
+#define _Included_pyjint
 
-PyAPI_FUNC(void) PyJArray_Init(void);
+PyAPI_FUNC(void) PyJInt_Init(void);
 
-#endif // ndef pyjarray
+/*
+ * Convert a java int to a python object of the appropriate type.
+ */
+PyAPI_FUNC(PyObject*) PyJInt_jtopy(JNIEnv*, jint);
+
+#endif // ndef pyjint

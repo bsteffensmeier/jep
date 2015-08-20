@@ -2,7 +2,7 @@
 /* 
    jep - Java Embedded Python
 
-   Copyright (c) 2015 JEP AUTHORS.
+   Copyright (c) 2004 - 2011 Mike Johnson.
 
    This file is licenced under the the zlib/libpng License.
 
@@ -24,8 +24,7 @@
 
    3. This notice may not be removed or altered from any source
    distribution.   
-*/
-
+*/ 	
 
 #ifdef WIN32
 # include "winconfig.h"
@@ -44,115 +43,36 @@
 #ifdef _POSIX_C_SOURCE
 #  undef _POSIX_C_SOURCE
 #endif
-#ifdef _FILE_OFFSET_BITS
-# undef _FILE_OFFSET_BITS
-#endif
 #include <jni.h>
 
 // shut up the compiler
 #ifdef _POSIX_C_SOURCE
 #  undef _POSIX_C_SOURCE
 #endif
+#ifdef _FILE_OFFSET_BITS
+# undef _FILE_OFFSET_BITS
+#endif
 #include "Python.h"
 
-#include "pyjmethodwrapper.h"
-#include "pyjobject.h"
-#include "pyembed.h"
+#include "pyjconverter.h"
+#include "pyjtype.h"
 
-PyAPI_DATA(PyTypeObject) PyJmethodWrapper_Type;
+static PyObject* converter_dict;
 
-static void pyjmethodwrapper_dealloc(PyJmethodWrapper_Object *self);
+typedef struct {
+    PyObject_HEAD
+    const char* className;
+    int score;
+    pyjconvert converter;
+} PyJConverterObject;
 
-/*
- * Makes a new pyjmethodwrapper.  This is required to reuse the pyjmethod
- * objects across multiple instances, otherwise we'd lose track of which
- * pyjobject is doing the calling.
- */
-PyJmethodWrapper_Object* pyjmethodwrapper_new(PyJobject_Object *pyjobject, // the instance doing the calling
-        PyJmethod_Object *pyjmethod) { // the method to be called
-    PyJmethodWrapper_Object *pym = NULL;
-
-    if(PyType_Ready(&PyJmethodWrapper_Type) < 0)
-        return NULL;
-
-    pym = PyObject_NEW(PyJmethodWrapper_Object, &PyJmethodWrapper_Type);
-    pym->method = pyjmethod;
-    pym->object = pyjobject;
-    Py_INCREF(pyjobject);
-    return pym;
-}
-
-static void pyjmethodwrapper_dealloc(PyJmethodWrapper_Object *self) {
-#if USE_DEALLOC
-    if(self->object) {
-        Py_DECREF(self->object);
-    }
-    PyObject_Del(self);
-#endif
-}
-
-
-
-/*
- * Called by python for pyjobject.__call__.  Since we reuse pyjmethod objects,
- * a unique instance of pyjmethodwrapper is created for every method on a
- * pyjobject to ensure the correct instance is used.  We then pass off the
- * actual invocation to the pyjmethod.
- */
-static PyObject* pyjmethodwrapper_call(PyJmethodWrapper_Object *self,
-                                PyObject *args,
-                                PyObject *keywords) {
-    PyObject *ret;
-    PyJobject_Object* obj;
-    
-    if(!PyTuple_Check(args)) {
-        PyErr_Format(PyExc_RuntimeError, "args is not a valid tuple");
-        return NULL;
-    }
-    
-    if(keywords != NULL) {
-        PyErr_Format(PyExc_RuntimeError, "Keywords are not supported.");
-        return NULL;
-    }
-
-    obj = self->object;
-    // pyjobject_find_method will actually call the method
-    ret = pyjobject_find_method(obj, self->method->pyMethodName, args);
-
-    /*
-     * This seems odd to Py_DECREF(self), but we had to Py_INCREF it
-     * over in pyjobject_getattr so that the garbage collector doesn't
-     * collect it before we even got to __call__ it.
-     *
-     * And now we want to make sure it gets cleaned up and can't tell if
-     * it will be reused.  If it is going to be reused, such as stored in
-     * a variable and repeatedly called, we're still safe.  For example:
-     *
-     * m = obj.doIt
-     * while condition:
-     *    m()
-     *
-     * As long as m is in scope, there will still be a reference so it won't
-     * get garbage collected until m goes out of scope.
-     */
-    Py_DECREF(self);
-
-    return ret;
-}
-
-
-static PyMethodDef pyjmethodwrapper_methods[] = {
-    {NULL, NULL, 0, NULL}
-};
-
-
-PyTypeObject PyJmethodWrapper_Type = {
+PyTypeObject PyJConverter_Type = {
     PyObject_HEAD_INIT(0)
     0,
-    "jep.PyJmethodWrapper",
-    sizeof(PyJmethodWrapper_Object),
+    "PyJConverter",
+    sizeof(PyJConverterObject),
     0,
-    (destructor) pyjmethodwrapper_dealloc,    /* tp_dealloc */
+    0,                                       /* tp_dealloc */
     0,                                        /* tp_print */
     0,                                        /* tp_getattr */
     0,                                        /* tp_setattr */
@@ -162,20 +82,20 @@ PyTypeObject PyJmethodWrapper_Type = {
     0,                                        /* tp_as_sequence */
     0,                                        /* tp_as_mapping */
     0,                                        /* tp_hash  */
-    (ternaryfunc) pyjmethodwrapper_call,      /* tp_call */
+    0,                                        /* tp_call */
     0,                                        /* tp_str */
     0,                                        /* tp_getattro */
     0,                                        /* tp_setattro */
     0,                                        /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,                       /* tp_flags */
-    "jmethodwrapper",                         /* tp_doc */
+    "Converter python objects into jvalues",  /* tp_doc */
     0,                                        /* tp_traverse */
     0,                                        /* tp_clear */
     0,                                        /* tp_richcompare */
     0,                                        /* tp_weaklistoffset */
     0,                                        /* tp_iter */
     0,                                        /* tp_iternext */
-    pyjmethodwrapper_methods,                 /* tp_methods */
+    0,                                        /* tp_methods */
     0,                                        /* tp_members */
     0,                                        /* tp_getset */
     0,                                        /* tp_base */
@@ -187,3 +107,80 @@ PyTypeObject PyJmethodWrapper_Type = {
     0,                                        /* tp_alloc */
     NULL,                                     /* tp_new */
 };
+
+int PyJConverter_Init(){
+    if(PyType_Ready(&PyJConverter_Type) < 0){
+        return 1;
+    }
+    converter_dict = PyDict_New();
+    if(converter_dict == NULL){
+        return 1;
+    }
+    return 0;
+}
+
+void PyJConverter_Register(const char* className, 
+                           PyObject* pytype,
+                           int score,
+                           pyjconvert converter){
+    PyJConverterObject* pyconverter = PyObject_New(PyJConverterObject, &PyJConverter_Type);
+    pyconverter->className = className;
+    pyconverter->score = score;
+    pyconverter->converter = converter;
+    PyObject* list = PyDict_GetItem(converter_dict, pytype);
+    if(list == NULL){
+        list = PyList_New(0);
+        PyDict_SetItem(converter_dict, pytype, list);
+    }
+    if(PyList_Append(list, (PyObject*) pyconverter) < 0){
+        printf("Bad\n");
+    }
+}
+
+PyJConverterObject* pyjconverter_get(PyObject* pyjtype, PyObject* pyobj){
+    PyObject* list = PyDict_GetItem(converter_dict, (PyObject*) Py_TYPE(pyobj));
+    if(list == NULL){
+        return NULL;
+    }
+    Py_ssize_t size = PyList_Size(list);
+    Py_ssize_t i;
+    const char * className = ((PyJTypeObject*) pyjtype)->pyjtp_pytype.tp_name;
+    for(i = 0 ; i < size; i += 1){
+        PyJConverterObject* pyconverter = (PyJConverterObject*) PyList_GetItem(list, i);
+        if(pyconverter == NULL){
+            /* TODO I don't know why this is here */
+            return NULL;
+        }
+        if (strcmp(pyconverter->className, className) == 0){
+            return pyconverter;
+        }
+    }
+    return NULL;
+}
+
+jvalue PyJConverter_Convert(JNIEnv* env, PyObject* pyjtype, PyObject* pyobj){
+    if(Py_TYPE(Py_TYPE(pyobj)) == (PyTypeObject*) &PyJType_Type){
+      // TODO make sure the type of the obj extends the type.
+      return ((PyJTypeObject*) Py_TYPE(pyobj))->pyjtp_pytoj(env, pyobj);
+    }
+    PyJConverterObject* converter = pyjconverter_get(pyjtype, pyobj);
+    if(converter){
+        return converter->converter(env, pyobj);
+    } 
+    PyErr_Format(PyExc_RuntimeError, "Cannot convert %s to %s.", Py_TYPE(pyobj)->tp_name, ((PyJTypeObject*) pyjtype)->pyjtp_pytype.tp_name);
+    jvalue val = {.l = NULL};
+    return val;
+}
+
+int PyJConverter_Score(PyObject* pyjtype, PyObject* pyobj){
+    if(Py_TYPE(Py_TYPE(pyobj)) == (PyTypeObject*) &PyJType_Type){
+      // TODO make sure the type of the obj extends the type.
+      return 0;
+    }
+    PyJConverterObject* converter = pyjconverter_get(pyjtype, pyobj);
+    if(converter){
+        return converter->score;
+    } 
+    return -1;
+}
+

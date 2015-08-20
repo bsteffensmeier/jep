@@ -2,7 +2,7 @@
 /* 
    jep - Java Embedded Python
 
-   Copyright (c) 2015 JEP_AUTHORS.
+   Copyright (c) 2004 - 2011 Mike Johnson.
 
    This file is licenced under the the zlib/libpng License.
 
@@ -24,8 +24,7 @@
 
    3. This notice may not be removed or altered from any source
    distribution.   
-*/
-
+*/ 	
 
 
 // shut up the compiler
@@ -35,30 +34,27 @@
 #include <jni.h>
 #include <Python.h>
 
+#ifndef _Included_pyjconverter
+#define _Included_pyjconverter
 
-#ifndef _Included_pyjmethodwrapper
-#define _Included_pyjmethodwrapper
+typedef jvalue (*pyjconvert)(JNIEnv*, PyObject*);
 
-#include "pyjobject.h"
-#include "pyjmethod.h"
+PyAPI_DATA(int) PyJConverter_Init(void);
 
 /*
- * PyJmethodWrapper_Object enables the ability to reuse a pyjmethod for
- * multiple instances of pyjobjects of the same underlying Java type.
+ * TODO explain scoring
  *
- * Pyjmethods are tied to java.lang.Methods, which are tied
- * to java.lang.Classes, which are shared across all instances of a particular
- * Class.  To ensure the right object is called with the method, the pyjmethod
- * wrapper includes both the pyjobject instance doing the calling and the
- * pyjmethod to be called.
+ * args are:
+ *   java classname
+ *   python type
+ *   score of converter, converters closer to 0 will be used before higher values
+ *   conversion method
  */
-typedef struct {
-    PyObject_HEAD
-    PyJmethod_Object *method; /* the original pyjmethod tied to a java.lang.reflect.Method */
-    PyJobject_Object *object; /* the pyjobject that called this method */
-} PyJmethodWrapper_Object;
+PyAPI_DATA(void) 
+    PyJConverter_Register(const char *, PyObject*, int, pyjconvert);
 
-PyJmethodWrapper_Object* pyjmethodwrapper_new(PyJobject_Object*,
-        PyJmethod_Object*);
+PyAPI_DATA(int) PyJConverter_Score(PyObject*, PyObject*);
 
-#endif // ndef pyjmethodwrapper
+PyAPI_DATA(jvalue) PyJConverter_Convert(JNIEnv*, PyObject*, PyObject*);
+
+#endif // ndef pyjconverter

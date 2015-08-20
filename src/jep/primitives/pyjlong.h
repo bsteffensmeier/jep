@@ -26,11 +26,18 @@
    distribution.   
 */ 	
 
+
 #include <Python.h>
+#include <jni.h>
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#ifndef _Included_pyjlong
+#define _Included_pyjlong
 
-PyAPI_FUNC(void) PyJArray_Init(void);
+PyAPI_FUNC(void) PyJLong_Init(void);
 
-#endif // ndef pyjarray
+/*
+ * Convert a java long to a python object of the appropriate type.
+ */
+PyAPI_FUNC(PyObject*) PyJLong_jtopy(JNIEnv*, jlong);
+
+#endif // ndef pyjlong

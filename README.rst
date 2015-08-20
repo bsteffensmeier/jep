@@ -1,102 +1,41 @@
-Jep - Java Embedded Python
-===========================
+Jep - The PyJType Fork
+=====================
 
-Jep embeds CPython in Java. It is safe to use in a heavily threaded
-environment, it is quite fast and its stability is a main feature and
-goal.
-
-Some benefits of CPython over Java-based languages:
-
-* Using the native Python interpreter may be much faster.
-
-* Python is mature and well supported, so there's no fear the
-  interpreter will suddenly change widely-used features.
-
-* Access to the high quality Python modules, both native and
-  Python-based.
-
-* Compilers and assorted Python tools are as mature as the language.
-
-* Python is an ideal language for your business logic. It is easy to
-  learn, readable and generally immune to programming gotchas.
-
-Patches, comments and other help is greatly appreciated. If you need
-help, post to the `SourceForge mailing list <http://sourceforge.net/mailarchive/forum.php?forum_name=jepp-users>`_
-or forums. Please include code snippets for the most accurate
-response.
-
-Jep is licensed zlib/libpng license to avoid linking issues.
-
-Installation
-------------
-
-Simply run ``pip install jep``.
-
-Dependencies
-------------
-* Python version >= 2.6
-* JNI >= 1.4
-
-*Building on Mac OS X*
-
-OS X requires the `Java Developer Package and Xcode
-<http://developer.apple.com/java/>`_ from Apple. They are free to download.
-
-*Windows*
-
-You'll need to use the same compiler that your Python is built
-with. That's usually MSVC.
-
-Note that Oracle is now building Java with a MSVCRT version that is
-not easily linked with using tools that I have. Using native modules
-on Windows has not worked in recent years because the compilers are
-not widely available. If an OpenJDK build used MinGW, that'd be
-much more likely to work.
-
-Running scripts
----------------
-
-The ``setup.py`` script will provide a ``jep`` shortcut to make launching Java and Python easier.
-
-::
-
-    $ jep
-    >>> from java.lang import System
-    >>> System.out.println('hello, world')
-    hello, world
-    >>>
-
-Running on \*nix
------------------
-Due to some (common) difficulties with Java and C projects
-that dlopen libraries, you may need to set LD_PRELOAD environment
-variable. That's in addition to setting LD_LIBRARY_PATH if you've
-installed libjep into a directory not cached by ld.so.
-
-See the contents of the installed ``jep`` script for an example how to do this.
-The script should have the correct values for your interpreter and virtualenv
-(if present).
-
-
-Running the tests
------------------
-
-The tests are run from setup.py:
-
-::
-
-    $ python setup.py test
-
-Support
--------
-
-For issues and source control, use github:
-
+This is a fork of Jep. The real jep can be found at 
 https://github.com/mrj0/jep/
 
-There's also a Sourceforge mailing list that is the best way to get support for Jep:
+All changes are released under the original Jep license which is the
+zlib/libpng license.
 
-https://sourceforge.net/mail/?group_id=109839
+The original goal of this fork is to unify the python type object with the
+java class object so that each java class can be wrapped by a python type and
+java objects in python can be instances of the python type that wraps their
+class. If that already sounds confusing you should try to understand how the 
+java Class class needs to be a metaclass in python so the instances of Class
+can be instances of Class and objects can be instances of classes which are 
+instances of the Class metatype.
+
+The end result is supposed to make everything more consistent so that it is
+possible to use python builtins like type and super to reflect on the java
+classes of the objects in python, it could also make it much easier to
+implement java interfaces from python because the Class metaclass will be able
+to control the creation of the Type. on the C level it also makes the code
+layout more Object Oriented and provides a clear path for extending java
+objects to add more python functionality(which is currently being done for
+things like Lists and Comparables). While I was in there I tried to make java
+methods in python act exactly like python methods so that you can have bound
+and unbound instances which should provide attribute lookup that is much closer
+to the way real python method lookup works and requires less custom attribute
+access.
+
+Unfortunatly this branch is now dead. I actualy got all of the core concepts
+working but I haven't yet run the unit tests or carefully tracked memory or
+even use the right class loader. So at this point its a leaky hack that
+probably isn't even worthy of being called beta. With all of the fun work done
+and only hard work ahead I have become unmotivated. The fork is on github in
+case anyone else has interest in the concepts or wants to explore similar
+ideas for jep. I would like to pick it up again in the future but I will need
+to reduce the scope so Im not rewriting all of jep and it will be reasonable to
+merge back into the official jep.
 
 
-Mike Johnson

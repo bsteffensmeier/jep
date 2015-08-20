@@ -26,11 +26,18 @@
    distribution.   
 */ 	
 
+
 #include <Python.h>
+#include <jni.h>
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#ifndef _Included_pyjdouble
+#define _Included_pyjdouble
 
-PyAPI_FUNC(void) PyJArray_Init(void);
+PyAPI_FUNC(void) PyJDouble_Init(void);
 
-#endif // ndef pyjarray
+/*
+ * Convert a java double to a python object of the appropriate type.
+ */
+PyAPI_FUNC(PyObject*) PyJDouble_jtopy(JNIEnv*, jdouble);
+
+#endif // ndef pyjdouble
