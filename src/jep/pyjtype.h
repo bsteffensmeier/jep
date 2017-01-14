@@ -35,6 +35,7 @@
 #define _Included_pyjtype
 
 PyAPI_FUNC(int) PyJType_Check(PyObject*);
+PyAPI_FUNC(PyTypeObject*) PyJType_Wrap(JNIEnv* env, jclass clazz);
 
 PyAPI_FUNC(jclass) PyJType_GetClass(PyObject*);
 

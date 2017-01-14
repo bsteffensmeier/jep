@@ -287,9 +287,9 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
 
     // validate we can call this method
     if(self->isStatic == JNI_TRUE){
-    if (!(*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
-        instance = PyObject_GetAttrString(PyObject_Type(instance), "__java_class__");
-    }
+        if (!(*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
+            instance = (PyJObject*) PyObject_GetAttrString((PyObject*) instance, "__java_class__");
+        }
     }else{
     if ((*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
         PyErr_Format(PyExc_RuntimeError,

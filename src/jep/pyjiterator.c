@@ -40,9 +40,9 @@ PyJIteratorObject* pyjiterator_new()
      * MSVC requires tp_base to be set here
      * See https://docs.python.org/2/extending/newtypes.html
      */
-    if (!PyJIterator_Type.tp_base) {
-        PyJIterator_Type.tp_base = &PyJObject_Type;
-    }
+    //if (!PyJIterator_Type.tp_base) {
+    //    PyJIterator_Type.tp_base = &PyJObject_Type;
+    //}
 
     if (PyType_Ready(&PyJIterator_Type) < 0) {
         return NULL;

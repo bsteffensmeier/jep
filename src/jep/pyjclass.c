@@ -220,7 +220,7 @@ int pyjclass_init_constructors(PyJClassObject *pyc)
     PyObject     *pycallable  = NULL;
     int           i           = 0;
 
-    clazz = ((PyJObject *) pyc)->clazz;
+    clazz = ((PyJObject *) pyc)->object;
 
     env = pyembed_get_env();
     if ((*env)->PushLocalFrame(env, JLOCAL_REFS) != 0) {

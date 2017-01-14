@@ -621,22 +621,22 @@ int pyjfield_set(PyJFieldObject *self, PyJObject *pyjobject, PyObject *value)
     return -1;
 }
 
-static PyObject* pyjfield_descr_get(PyObject *field, PyObject *obj, PyObject *type){
+static PyObject* pyjfield_descr_get(PyJFieldObject *field, PyObject *obj, PyObject *type){
     if(!obj){
         //printf("PyJField get\n");
         obj = PyObject_GetAttrString(type, "__java_class__");
     }
 
-    return pyjfield_get(field, obj);
+    return pyjfield_get(field, (PyJObject*) obj);
 }
 
 
-static int pyjfield_descr_set(PyObject *field, PyObject *obj, PyObject *value){
+static int pyjfield_descr_set(PyJFieldObject *field, PyObject *obj, PyObject *value){
     if(!pyjobject_check(obj)){
         //printf("PyJField set\n");
         obj = PyObject_GetAttrString(obj, "__java_class__");
     }
-    return pyjfield_set(field, obj, value);
+    return pyjfield_set(field, (PyJObject*) obj, value);
 }
 
 static PyMethodDef pyjfield_methods[] = {
@@ -677,8 +677,8 @@ PyTypeObject PyJField_Type = {
     0,                                        /* tp_getset */
     0,                                        /* tp_base */
     0,                                        /* tp_dict */
-    pyjfield_descr_get,                       /* tp_descr_get */
-    pyjfield_descr_set,                       /* tp_descr_set */
+    (descrgetfunc) pyjfield_descr_get,        /* tp_descr_get */
+    (descrsetfunc) pyjfield_descr_set,        /* tp_descr_set */
     0,                                        /* tp_dictoffset */
     0,                                        /* tp_init */
     0,                                        /* tp_alloc */
