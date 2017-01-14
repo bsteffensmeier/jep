@@ -594,7 +594,7 @@ static PyMappingMethods pyjlist_map_methods = {
 PyTypeObject PyJList_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
     "jep.PyJList",
-    sizeof(PyJListObject),
+    0,//sizeof(PyJListObject),
     0,
     0,                                        /* tp_dealloc */
     0,                                        /* tp_print */
@@ -611,7 +611,8 @@ PyTypeObject PyJList_Type = {
     0,                                        /* tp_getattro */
     0,                                        /* tp_setattro */
     0,                                        /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,                       /* tp_flags */
+    Py_TPFLAGS_DEFAULT |                      /* tp_flags */
+    Py_TPFLAGS_BASETYPE,
     "jlist",                                  /* tp_doc */
     0,                                        /* tp_traverse */
     0,                                        /* tp_clear */

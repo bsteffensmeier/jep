@@ -35,11 +35,14 @@ static int pyjobject_init(JNIEnv *env, PyJObject*);
 static void pyjobject_init_subtypes(void);
 static int  subtypes_initialized = 0;
 
+
 static jmethodID objectEquals    = 0;
 static jmethodID objectHashCode  = 0;
 static jmethodID classGetMethods = 0;
 static jmethodID classGetFields  = 0;
 static jmethodID compareTo       = 0;
+
+static PyTypeObject *baseType = NULL;
 
 /*
  * MSVC requires tp_base to be set at runtime instead of in
@@ -53,11 +56,24 @@ static jmethodID compareTo       = 0;
  */
 static void pyjobject_init_subtypes(void)
 {
-    // start at the top with object
-    if (PyType_Ready(&PyJObject_Type) < 0) {
+    baseType = PyMem_Malloc(sizeof(PyTypeObject));
+    memcpy(baseType, &PyJObject_Type, sizeof(PyTypeObject));
+        
+    if (!PyJType_Type.tp_base) {
+        PyJType_Type.tp_base = &PyType_Type;
+    }
+    if (PyType_Ready(&PyJType_Type) < 0) {
         return;
     }
 
+    // start at the top with object
+    if (!Py_TYPE(&PyJObject_Type)) {
+        Py_TYPE(&PyJObject_Type) = &PyJType_Type;
+    }
+    if (PyType_Ready(&PyJObject_Type) < 0) {
+        return;
+    }
+    //printf("%s\n", Py_TYPE(&PyJObject_Type)->tp_name);
     // next do number
     if (!PyJNumber_Type.tp_base) {
         PyJNumber_Type.tp_base = &PyJObject_Type;
@@ -67,10 +83,13 @@ static void pyjobject_init_subtypes(void)
     }
 
     // next do iterable
-    if (!PyJIterable_Type.tp_base) {
-        PyJIterable_Type.tp_base = &PyJObject_Type;
-    }
+    //if (!PyJIterable_Type.tp_base) {
+    //    PyJIterable_Type.tp_base = &PyJObject_Type;
+    //}
     if (PyType_Ready(&PyJIterable_Type) < 0) {
+        return;
+    }
+    if (PyType_Ready(&PyJIterator_Type) < 0) {
         return;
     }
 
@@ -83,22 +102,232 @@ static void pyjobject_init_subtypes(void)
     }
 
     // next do list
-    if (!PyJList_Type.tp_base) {
-        PyJList_Type.tp_base = &PyJCollection_Type;
-    }
+    //if (!PyJList_Type.tp_base) {
+    //    PyJList_Type.tp_base = &PyJCollection_Type;
+    //}
     if (PyType_Ready(&PyJList_Type) < 0) {
         return;
     }
 
     // last do map
-    if (!PyJMap_Type.tp_base) {
-        PyJMap_Type.tp_base = &PyJObject_Type;
-    }
+    //if (!PyJMap_Type.tp_base) {
+    //    PyJMap_Type.tp_base = &PyJObject_Type;
+    //}
     if (PyType_Ready(&PyJMap_Type) < 0) {
         return;
     }
 
     subtypes_initialized = 1;
+}
+
+static void load_methods(JNIEnv *env, jclass objClz, PyObject* dict){
+    int i;
+
+    if (!JNI_METHOD(classGetMethods, env, JCLASS_TYPE, "getMethods",
+                    "()[Ljava/lang/reflect/Method;")) {
+        process_java_exception(env);
+        goto EXIT_ERROR;
+    }
+    jobjectArray methodArray = (jobjectArray) (*env)->CallObjectMethod(env, objClz, classGetMethods);
+    if (process_java_exception(env) || !methodArray) {
+        goto EXIT_ERROR;
+    }
+
+    // for each method, create a new pyjmethod object
+    jint len = (*env)->GetArrayLength(env, methodArray);
+    for (i = 0; i < len; i++) {
+        PyJMethodObject *pymethod = NULL;
+        jobject rmethod = NULL;
+
+        rmethod = (*env)->GetObjectArrayElement(env, methodArray, i);
+
+        // make new PyJMethodObject, linked to pyjob
+        pymethod = PyJMethod_New(env, rmethod);
+
+        if (!pymethod) {
+            continue;
+        }
+
+        if (pymethod->pyMethodName && PyString_Check(pymethod->pyMethodName)) {
+            PyObject* cached = PyDict_GetItem(dict, pymethod->pyMethodName);
+            if (cached && PyJMethod_Check(cached)) {
+                PyObject* multimethod = PyJMultiMethod_New((PyObject*) pymethod, cached);
+                PyDict_SetItem(dict, pymethod->pyMethodName, multimethod);
+            } else if (cached && PyJMultiMethod_Check(cached)) {
+                PyJMultiMethod_Append(cached, (PyObject*) pymethod);
+            }else{
+                if (PyDict_SetItem(dict, pymethod->pyMethodName, (PyObject*) pymethod) != 0) {
+                    printf("WARNING: couldn't add method");
+                }
+            }
+        }
+
+        Py_DECREF(pymethod);
+        (*env)->DeleteLocalRef(env, rmethod);
+    } // end of looping over available methods
+EXIT_ERROR:
+    return;
+}
+
+static void load_fields(JNIEnv *env, jclass objClz, PyObject* dict){
+    int i;
+
+    if (!JNI_METHOD(classGetFields, env,  JCLASS_TYPE, "getFields",
+                    "()[Ljava/lang/reflect/Field;")) {
+        process_java_exception(env);
+        return;
+    }
+
+    jobjectArray fieldArray = (jobjectArray) (*env)->CallObjectMethod(env,
+                 objClz,
+                 classGetFields);
+    if (process_java_exception(env) || !fieldArray) {
+        return;
+    }
+
+    // for each field, create a pyjfield object and
+    // add to the internal members list.
+    int len = (*env)->GetArrayLength(env, fieldArray);
+    for (i = 0; i < len; i++) {
+        jobject          rfield   = NULL;
+        PyJFieldObject *pyjfield = NULL;
+
+        rfield = (*env)->GetObjectArrayElement(env,
+                                               fieldArray,
+                                               i);
+
+        pyjfield = pyjfield_new(env, rfield);
+
+        if (!pyjfield) {
+            continue;
+        }
+
+        if (pyjfield->pyFieldName && PyString_Check(pyjfield->pyFieldName)) {
+                PyDict_SetItem(dict, pyjfield->pyFieldName, (PyObject*) pyjfield);
+        }
+
+        Py_DECREF(pyjfield);
+        (*env)->DeleteLocalRef(env, rfield);
+    }
+    (*env)->DeleteLocalRef(env, fieldArray);
+}
+
+static PyTypeObject* pyjobject_load_type(JNIEnv *env, jclass objClz){
+    JepThread   *jepThread;
+    jstring className;
+    PyObject* pyClassName;
+
+    className = (*env)->CallObjectMethod(env, objClz, JCLASS_GET_NAME);
+    if (process_java_exception(env) || !className) {
+        return NULL;
+    }
+    pyClassName = jstring_To_PyObject(env, className);
+    jepThread = pyembed_get_jepthread();
+    if (jepThread->classNameToPyType == NULL) {
+        jepThread->classNameToPyType = PyDict_New();
+    }
+    PyTypeObject* type = (PyTypeObject*) PyDict_GetItem(jepThread->classNameToPyType, pyClassName);
+    if(type == NULL){
+        //printf("%s\n", PyString_AsString(pyClassName));
+        if((*env)->IsSameObject(env, objClz, JOBJECT_TYPE)){
+            PyDict_SetItem(jepThread->classNameToPyType, pyClassName, (PyObject*) &PyJObject_Type);
+            load_methods(env, objClz, PyJObject_Type.tp_dict);
+            load_fields(env, objClz, PyJObject_Type.tp_dict);
+            PyDict_SetItemString(PyJObject_Type.tp_dict, "__java_class__", pyjobject_new(env, objClz));
+            Py_DECREF(pyClassName);
+            return &PyJObject_Type;
+        }else if((*env)->IsSameObject(env, objClz, JNUMBER_TYPE)){
+            PyDict_SetItem(jepThread->classNameToPyType, pyClassName, (PyObject*) &PyJNumber_Type);
+            load_methods(env, objClz, PyJNumber_Type.tp_dict);
+            load_fields(env, objClz, PyJNumber_Type.tp_dict);
+            PyDict_SetItemString(PyJNumber_Type.tp_dict, "__java_class__", pyjobject_new(env, objClz));
+            Py_DECREF(pyClassName);
+            return &PyJNumber_Type;
+
+        }
+        jclass super = (*env)->GetSuperclass(env, objClz);
+        
+        PyObject* bases = NULL;
+        //if ((*env)->IsAssignableFrom(env, objClz, JNUMBER_TYPE)) {
+        //    bases = PyTuple_New(2);
+        //    PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+        //    PyTuple_SetItem(bases, 1, &PyJNumber_Type);
+        //}else 
+        if ((*env)->IsAssignableFrom(env, objClz, JLIST_TYPE)) {
+            bases = PyTuple_New(2);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+            PyTuple_SetItem(bases, 1, &PyJList_Type);
+        }else if ((*env)->IsAssignableFrom(env, objClz, JCOLLECTION_TYPE)) {
+            bases = PyTuple_New(2);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+            PyTuple_SetItem(bases, 1, &PyJCollection_Type);
+        }else if ((*env)->IsAssignableFrom(env, objClz, JITERABLE_TYPE)) {
+            bases = PyTuple_New(2);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+            PyTuple_SetItem(bases, 1, &PyJIterable_Type);
+        }else if ((*env)->IsAssignableFrom(env, objClz, JITERATOR_TYPE)) {
+            bases = PyTuple_New(2);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+            PyTuple_SetItem(bases, 1, &PyJIterator_Type);
+        }else if ((*env)->IsAssignableFrom(env, objClz, JMAP_TYPE)) {
+            bases = PyTuple_New(2);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+            PyTuple_SetItem(bases, 1, &PyJMap_Type);
+        }else{
+            bases = PyTuple_New(1);
+            PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+        }
+        //PyTuple_SetItem(bases, 0, pyjobject_load_type(env, super));
+        //PyTuple_SetItem(bases, 0, &PyJObject_Type);
+        PyObject* dict = PyDict_New();
+        load_methods(env, objClz, dict);
+        load_fields(env, objClz, dict);
+        if(!(*env)->IsSameObject(env, objClz, JCLASS_TYPE)){
+            PyDict_SetItemString(dict, "__java_class__", pyjobject_new(env, objClz));
+        }
+        type = PyObject_CallFunctionObjArgs(&PyJType_Type, pyClassName, bases, dict, NULL);
+        if(PyErr_Occurred()){
+            PyErr_Print();
+        }
+        //printf("%s\n", PyString_AsString(PyObject_Str(PyObject_Type(type))));
+        PyDict_SetItem(jepThread->classNameToPyType, pyClassName, (PyObject*) type);
+        if((*env)->IsSameObject(env, objClz, JCLASS_TYPE)){
+            PyDict_SetItemString(type->tp_dict, "__java_class__", pyjobject_new(env, objClz));
+        }
+        /*
+        type = PyMem_Malloc(sizeof(PyTypeObject));
+        memcpy(type, baseType, sizeof(PyTypeObject));
+        jclass super = (*env)->GetSuperclass(env, objClz);
+        type->tp_base = pyjobject_load_type(env, super);
+        // TODO I don't own this memory, but Im not sure I care. 
+        type->tp_name = PyString_AsString(pyClassName);
+        type->tp_doc = "Dynamically created type for a java class.";
+        type->tp_dict = PyDict_New();
+        if(type->tp_dict == NULL){
+            Py_DECREF(type);
+            return NULL;
+        }
+        if(strcmp(PyString_AsString(pyClassName), "java.lang.Class") != 0){
+            //PyDict_SetItemString(type->tp_dict, "__java_class__", pyjobject_new(env, objClz));
+        }
+        load_methods(env, objClz, type->tp_dict);
+        load_fields(env, objClz, type->tp_dict);
+        if (PyType_Ready(type) < 0) {
+            return NULL;
+        }
+        PyDict_SetItem(jepThread->classNameToPyType, pyClassName, (PyObject*) type);
+        if(strcmp(PyString_AsString(pyClassName), "java.lang.Class") == 0){
+            //PyDict_SetItemString(type->tp_dict, "__java_class__", pyjobject_new(env, objClz));
+        }
+        */
+    }
+    Py_INCREF(type);
+    Py_INCREF(type);
+    Py_INCREF(type);
+    Py_INCREF(type);
+    Py_DECREF(pyClassName);
+    //printf("refcnt %d %s \n", ((PyObject*) type)->ob_refcnt, type->tp_name);
+    return type;
 }
 
 
@@ -129,11 +358,11 @@ PyObject* pyjobject_new(JNIEnv *env, jobject obj)
     jtype = get_jtype(env, objClz);
     if (jtype == JARRAY_ID) {
         return pyjarray_new(env, obj);
-    } else if (jtype == JCLASS_ID) {
-        return pyjobject_new_class(env, obj);
+    //} else if (jtype == JCLASS_ID) {
+    //    return pyjobject_new_class(env, obj);
     } else {
         // check for some of our extensions to pyjobject
-        if ((*env)->IsInstanceOf(env, obj, JITERABLE_TYPE)) {
+        /*if ((*env)->IsInstanceOf(env, obj, JITERABLE_TYPE)) {
             if ((*env)->IsInstanceOf(env, obj, JCOLLECTION_TYPE)) {
                 if ((*env)->IsInstanceOf(env, obj, JLIST_TYPE)) {
                     pyjob = (PyJObject*) pyjlist_new();
@@ -149,11 +378,17 @@ PyObject* pyjobject_new(JNIEnv *env, jobject obj)
             pyjob = (PyJObject*) pyjmap_new();
         } else if ((*env)->IsInstanceOf(env, obj, JITERATOR_TYPE)) {
             pyjob = (PyJObject*) pyjiterator_new();
-        } else if ((*env)->IsInstanceOf(env, obj, JNUMBER_TYPE)) {
-            pyjob = (PyJObject*) pyjnumber_new();
-        } else {
-            pyjob = PyObject_NEW(PyJObject, &PyJObject_Type);
-        }
+        //} else if ((*env)->IsInstanceOf(env, obj, JNUMBER_TYPE)) {
+        //    pyjob = (PyJObject*) pyjnumber_new(); */
+//        } else {
+            PyTypeObject* type = pyjobject_load_type(env, objClz);
+            pyjob = PyType_GenericAlloc(type, 0); 
+            //if(type == &PyJObject_Type){
+            //    pyjob = PyObject_New(PyJObject, type);
+            //}else{
+            //    pyjob = PyObject_GC_New(PyJObject, type);
+            //}
+//        }
     }
 
 
@@ -180,6 +415,11 @@ PyObject* pyjobject_new_class(JNIEnv *env, jclass clazz)
         PyErr_Format(PyExc_RuntimeError, "Invalid class object.");
         return NULL;
     }
+ 
+    if(1){
+        return (PyObject*) pyjobject_load_type(env, clazz);
+    }
+
 
     if (!PyJClass_Type.tp_base) {
         PyJClass_Type.tp_base = &PyJObject_Type;
@@ -233,9 +473,9 @@ static int pyjobject_init(JNIEnv *env, PyJObject *pyjob)
     }
     pyClassName = jstring_To_PyObject(env, className);
     pyAttrName = PyString_FromString("java_name");
-    if (PyObject_SetAttr((PyObject *) pyjob, pyAttrName, pyClassName) == -1) {
-        goto EXIT_ERROR;
-    }
+    //if (PyObject_SetAttr((PyObject *) pyjob, pyAttrName, pyClassName) == -1) {
+    //    goto EXIT_ERROR;
+    //}
     pyjob->javaClassName = pyClassName;
     Py_DECREF(pyAttrName);
     // then, get methodid for getMethods()
@@ -352,7 +592,7 @@ static int pyjobject_init(JNIEnv *env, PyJObject *pyjob)
         Py_DECREF(pyjMethodList); // fqnToPyJmethods will hold the reference
         (*env)->DeleteLocalRef(env, methodArray);
     } // end of setting up cache for this Java Class
-
+/*
     len = (int) PyList_Size(cachedMethodList);
     for (i = 0; i < len; i++) {
         PyObject* name   = NULL;
@@ -371,7 +611,7 @@ static int pyjobject_init(JNIEnv *env, PyJObject *pyjob)
             Py_DECREF(name);
         }
     } // end of cached method optimizations
-
+*/
 
     // ------------------------------ process fields
     if (!JNI_METHOD(classGetFields, env,  JCLASS_TYPE, "getFields",
@@ -386,7 +626,7 @@ static int pyjobject_init(JNIEnv *env, PyJObject *pyjob)
     if (process_java_exception(env) || !fieldArray) {
         goto EXIT_ERROR;
     }
-
+/*
     // for each field, create a pyjfield object and
     // add to the internal members list.
     len = (*env)->GetArrayLength(env, fieldArray);
@@ -416,7 +656,7 @@ static int pyjobject_init(JNIEnv *env, PyJObject *pyjob)
         (*env)->DeleteLocalRef(env, rfield);
     }
     (*env)->DeleteLocalRef(env, fieldArray);
-
+*/
     // we've finished the object.
     pyjob->finishAttr = 1;
     (*env)->PopLocalFrame(env, NULL);
@@ -452,7 +692,7 @@ void pyjobject_dealloc(PyJObject *self)
     Py_CLEAR(self->attr);
     Py_CLEAR(self->javaClassName);
 
-    PyObject_Del(self);
+    //PyObject_GC_Del(self);
 #endif
 }
 
@@ -655,47 +895,14 @@ PyObject* pyjobject_getattro(PyObject *obj, PyObject *name)
         Py_DECREF(ret);
         return wrapper;
     } else if (pyjfield_check(ret)) {
-        PyObject *resolved = pyjfield_get((PyJFieldObject *) ret);
-        Py_DECREF(ret);
-        return resolved;
+        //PyObject *resolved = pyjfield_get((PyJFieldObject *) ret);
+        //Py_DECREF(ret);
+        //return resolved;
     }
     return ret;
 }
 
 
-// set attribute v for object.
-// uses obj->attr dictionary for storage.
-int pyjobject_setattro(PyJObject *obj, PyObject *name, PyObject *v)
-{
-    if (v == NULL) {
-        PyErr_Format(PyExc_TypeError,
-                     "Deleting attributes from PyJObjects is not allowed.");
-        return -1;
-    }
-    if (obj->finishAttr) {
-        PyObject *cur = PyDict_GetItem(obj->attr, name);
-
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-
-        if (cur == NULL) {
-            PyErr_SetString(PyExc_RuntimeError, "No such field.");
-            return -1;
-        }
-
-        if (!pyjfield_check(cur)) {
-            PyErr_SetString(PyExc_TypeError, "Not a pyjfield object.");
-            return -1;
-        }
-
-        return pyjfield_set((PyJFieldObject *) cur, v);
-    }
-
-    PyDict_SetItem(obj->attr, name, v);
-
-    return 0;
-}
 
 static long pyjobject_hash(PyJObject *self)
 {
@@ -727,6 +934,107 @@ static long pyjobject_hash(PyJObject *self)
     return hash;
 }
 
+static jmethodID classGetConstructors = NULL;
+
+static PyObject* pyjobject_init_constructors(PyJObject *pyc)
+{
+    JNIEnv       *env         = NULL;
+    jobjectArray  initArray   = NULL;
+    int           initLen     = 0;
+    PyObject     *pycallable  = NULL;
+    int           i           = 0;
+
+    env = pyembed_get_env();
+    if ((*env)->PushLocalFrame(env, JLOCAL_REFS) != 0) {
+        process_java_exception(env);
+        return NULL;
+    }
+
+    if (!JNI_METHOD(classGetConstructors, env, JCLASS_TYPE, "getConstructors",
+                    "()[Ljava/lang/reflect/Constructor;")) {
+        process_java_exception(env);
+        goto EXIT_ERROR;
+    }
+
+    initArray = (jobjectArray) (*env)->CallObjectMethod(env, pyc->object,
+                classGetConstructors);
+    if (process_java_exception(env) || !initArray) {
+        goto EXIT_ERROR;
+    }
+
+    initLen   = (*env)->GetArrayLength(env, initArray);
+
+    for (i = 0; i < initLen; i++) {
+        PyObject *pyjinit     = NULL;
+        jobject   constructor = NULL;
+
+        constructor = (*env)->GetObjectArrayElement(env, initArray, i);
+        if (process_java_exception(env) || !constructor) {
+            goto EXIT_ERROR;
+        }
+        pyjinit = PyJConstructor_New(env, constructor);
+        if (pyjinit == NULL) {
+            goto EXIT_ERROR;
+        }
+        (*env)->DeleteLocalRef(env, constructor);
+
+        if (i == 0) {
+            pycallable = pyjinit;
+        } else if (i == 1) {
+            PyObject* firstInit = pycallable;
+            pycallable = PyJMultiMethod_New(firstInit, pyjinit);
+            Py_DECREF(firstInit);
+            Py_DECREF(pyjinit);
+            if (pycallable == NULL) {
+                goto EXIT_ERROR;
+            }
+        } else {
+            if (PyJMultiMethod_Append(pycallable, pyjinit) == -1) {
+                Py_DECREF(pyjinit);
+                goto EXIT_ERROR;
+            }
+            Py_DECREF(pyjinit);
+        }
+    }
+    (*env)->DeleteLocalRef(env, initArray);
+
+    if (!pycallable) {
+        PyErr_Format(PyExc_TypeError, "No public constructor");
+    }
+
+    (*env)->PopLocalFrame(env, NULL);
+    return pycallable;
+
+EXIT_ERROR:
+    (*env)->PopLocalFrame(env, NULL);
+    Py_CLEAR(pycallable);
+    return NULL;
+}
+
+static PyObject* pyjobject_tp_new(PyTypeObject *subtype, PyObject *args, PyObject *kwds){
+    PyObject *boundConstructor = NULL;
+    PyObject *result           = NULL;
+
+    PyObject* pyClass = PyDict_GetItemString(subtype->tp_dict, "__java_class__");
+    PyObject* constructor = PyDict_GetItemString(subtype->tp_dict, "__constructor__");
+    if (constructor == NULL) {
+        constructor = pyjobject_init_constructors((PyJObject*) pyClass);
+        if (constructor == NULL) {
+            return NULL;
+        }
+        PyDict_SetItemString(subtype->tp_dict, "__constructor__", constructor);
+    }
+#if PY_MAJOR_VERSION >= 3
+    boundConstructor = PyMethod_New(constructor, pyClass);
+#else
+    boundConstructor = PyMethod_New(constructor, pyClass,
+                                    (PyObject*) subtype);
+#endif
+    result = PyObject_Call(boundConstructor, args, kwds);
+    Py_DECREF(boundConstructor);
+    return result;
+}
+
 static struct PyMethodDef pyjobject_methods[] = {
     { NULL, NULL }
 };
@@ -753,8 +1061,8 @@ PyTypeObject PyJObject_Type = {
     (hashfunc) pyjobject_hash,                /* tp_hash  */
     0,                                        /* tp_call */
     (reprfunc) pyjobject_str,                 /* tp_str */
-    (getattrofunc) pyjobject_getattro,        /* tp_getattro */
-    (setattrofunc) pyjobject_setattro,        /* tp_setattro */
+    PyObject_GenericGetAttr,                  /* tp_getattro */
+    PyObject_GenericSetAttr,                  /* tp_setattro */
     0,                                        /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT |
     Py_TPFLAGS_BASETYPE,                      /* tp_flags */
@@ -775,5 +1083,5 @@ PyTypeObject PyJObject_Type = {
     offsetof(PyJObject, attr),                /* tp_dictoffset */
     0,                                        /* tp_init */
     0,                                        /* tp_alloc */
-    NULL,                                     /* tp_new */
+    pyjobject_tp_new,                         /* tp_new */
 };

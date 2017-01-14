@@ -75,7 +75,6 @@ PyObject* pyjarray_new(JNIEnv *env, jobjectArray obj)
     }
 }
 
-
 // called from module to create new arrays.
 // args are variable, should accept:
 // (size, typeid, [value]), (size, jobject),
@@ -170,6 +169,14 @@ PyObject* pyjarray_new_v(PyObject *isnull, PyObject *args)
             typeId = JARRAY_ID;
 
             componentClass = pyarray->clazz;
+            arrayObj = (*env)->NewObjectArray(env,
+                                              (jsize) size,
+                                              componentClass,
+                                              NULL);
+        } else if (PyJType_Check(two)) {
+            typeId = JOBJECT_ID;
+
+            componentClass = PyJType_GetClass(two);
             arrayObj = (*env)->NewObjectArray(env,
                                               (jsize) size,
                                               componentClass,

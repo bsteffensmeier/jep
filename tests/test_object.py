@@ -15,4 +15,6 @@ class TestObject(unittest.TestCase):
     def test_del_throws_exception(self):
         o = Object()
         with self.assertRaises(TypeError):
+            del Object.equals
+        with self.assertRaises(AttributeError):
             del o.equals

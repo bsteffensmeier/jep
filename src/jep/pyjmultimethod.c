@@ -193,6 +193,23 @@ static void pyjmultimethod_dealloc(PyJMultiMethodObject *self)
     PyObject_Del(self);
 }
 
+static PyObject* pyjmultimethod_descr_get(PyObject *func, PyObject *obj, PyObject *type){
+    //printf("%s\n", PyString_AsString(PyJMultiMethod_GetName(func)));
+    if (obj == Py_None){
+        obj = NULL;
+    }
+    if(!obj){
+        obj = PyObject_GetAttrString(type, "__java_class__");
+    }
+#if PY_MAJOR_VERSION >= 3
+    return PyMethod_New(func, obj);
+#else
+    return PyMethod_New(func, obj, type);
+#endif
+
+}
+
+
 static PyGetSetDef pyjmultimethod_getsetlist[] = {
     {"__name__", (getter) PyJMultiMethod_GetName, NULL},
     {"__methods__", (getter) pyjmultimethod_getmethods, NULL},
@@ -236,7 +253,7 @@ PyTypeObject PyJMultiMethod_Type = {
     pyjmultimethod_getsetlist,                /* tp_getset */
     0,                                        /* tp_base */
     0,                                        /* tp_dict */
-    0,                                        /* tp_descr_get */
+    pyjmultimethod_descr_get,                 /* tp_descr_get */
     0,                                        /* tp_descr_set */
     0,                                        /* tp_dictoffset */
     0,                                        /* tp_init */

@@ -686,6 +686,17 @@ int pyarg_matches_jtype(JNIEnv *env,
                 return 1;
             }
         }
+    } else if (PyJType_Check(param)) {
+        switch (paramTypeId) {
+        case JCLASS_ID:
+            return 2;
+        case JOBJECT_ID:
+            if ((*env)->IsAssignableFrom(env,
+                                         JCLASS_TYPE,
+                                         paramType)) {
+                return 1;
+            }
+        }
     } else if (pyjobject_check(param)) {
         switch (paramTypeId) {
         case JOBJECT_ID:

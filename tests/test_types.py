@@ -660,6 +660,7 @@ class TestTypes(unittest.TestCase):
             self.fields.objectClass = c
             self.assertEqual(c, self.fields.objectClass)
             self.fields.object = c
+            self.fields.verify()
             self.assertEqual(c, self.fields.object)
             self.staticFields.objectClass = c
             self.assertEqual(c, self.staticFields.objectClass)

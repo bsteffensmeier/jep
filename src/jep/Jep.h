@@ -39,6 +39,7 @@
 #include "jep_numpy.h"
 
 #include "pyembed.h"
+#include "pyjtype.h"
 #include "pyjarray.h"
 #include "pyjclass.h"
 #include "pyjcollection.h"

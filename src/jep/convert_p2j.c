@@ -630,6 +630,9 @@ jobject PyObject_As_jobject(JNIEnv *env, PyObject *pyobject,
         return pyfastsequence_as_jobject(env, pyobject, expectedType);
     } else if (PyDict_Check(pyobject)) {
         return pydict_as_jobject(env, pyobject, expectedType);
+    } else if (PyJType_Check(pyobject) && (*env)->IsAssignableFrom(env, JCLASS_TYPE, expectedType)) {
+        //printf("converting %s\n", ((PyTypeObject*) pyobject)->tp_name);
+        return (*env)->NewLocalRef(env, PyJType_GetClass(pyobject));
 #if JEP_NUMPY_ENABLED
     } else if (npy_array_check(pyobject)) {
         return convert_pyndarray_jobject(env, pyobject, expectedType);

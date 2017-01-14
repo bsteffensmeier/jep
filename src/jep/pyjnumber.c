@@ -146,6 +146,7 @@ static PyObject* pyjnumber_power(PyObject *x, PyObject *y, PyObject *z)
     PyObject *result = NULL;
     JNIEnv   *env    = pyembed_get_env();
 
+
     TO_PYTHON_NUMBER(env, x);
     TO_PYTHON_NUMBER(env, y);
     if (z != Py_None) {
@@ -284,7 +285,7 @@ static PyObject* pyjnumber_richcompare(PyObject *self,
 {
     PyObject *result = NULL;
     JNIEnv   *env    = pyembed_get_env();
-
+    
     TO_PYTHON_NUMBER(env, self);
     TO_PYTHON_NUMBER(env, other);
     result = PyObject_RichCompare(self, other, opid);
@@ -445,9 +446,9 @@ PyTypeObject PyJNumber_Type = {
     0,                                        /* tp_setattro */
     0,                                        /* tp_as_buffer */
 #if PY_MAJOR_VERSION < 3
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES,/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_CHECKTYPES | Py_TPFLAGS_BASETYPE,/* tp_flags */
 #else
-    Py_TPFLAGS_DEFAULT,                       /* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,/* tp_flags */
 #endif
     "jnumber",                                /* tp_doc */
     0,                                        /* tp_traverse */

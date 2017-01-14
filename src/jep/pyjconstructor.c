@@ -148,7 +148,7 @@ static PyObject* pyjconstructor_call(PyJMethodObject *self, PyObject *args,
     }
 
     firstArg = PyTuple_GetItem(args, 0);
-    if (!pyjclass_check(firstArg)) {
+    if (!pyjobject_check(firstArg)) {
         PyErr_SetString(PyExc_RuntimeError,
                         "First argument to a java constructor must be a java class.");
         return NULL;
@@ -192,7 +192,7 @@ static PyObject* pyjconstructor_call(PyJMethodObject *self, PyObject *args,
 
     Py_UNBLOCK_THREADS;
     obj = (*env)->NewObjectA(env,
-                             clazz->clazz,
+                             clazz->object,
                              self->methodId,
                              jargs);
     Py_BLOCK_THREADS;

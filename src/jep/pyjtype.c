@@ -28,95 +28,41 @@
 
 #include "Jep.h"
 
-jmethodID itrHasNext = 0;
-jmethodID itrNext    = 0;
-
-/*
- * News up a pyjiterator, which is just a pyjobject for iterators.
- */
-PyJIteratorObject* pyjiterator_new()
+int PyJType_Check(PyObject *obj)
 {
-    /*
-     * MSVC requires tp_base to be set here
-     * See https://docs.python.org/2/extending/newtypes.html
-     */
-    if (!PyJIterator_Type.tp_base) {
-        PyJIterator_Type.tp_base = &PyJObject_Type;
-    }
-
-    if (PyType_Ready(&PyJIterator_Type) < 0) {
-        return NULL;
-    }
-
-    return PyObject_NEW(PyJIteratorObject, &PyJIterator_Type);
+    return PyObject_TypeCheck(obj, &PyJType_Type);
 }
 
-/*
- * Checks if the object is a pyjiterator.
- */
-int pyjiterator_check(PyObject *obj)
-{
-    if (PyObject_TypeCheck(obj, &PyJIterator_Type)) {
-        return 1;
-    }
-    return 0;
+jclass PyJType_GetClass(PyObject *obj){
+    PyTypeObject* type = (PyTypeObject*) obj;
+    PyJObject* pyClass = (PyJObject*) PyDict_GetItemString(type->tp_dict, "__java_class__");
+    //printf("GetClass %d %d %d %s %s\n", pyClass, pyClass->object, pyClass->clazz, type->tp_name, PyString_AsString(PyObject_Str(pyClass)));
+    return (jclass) pyClass->object;
 }
 
-PyObject* pyjiterator_next(PyObject* self)
-{
-    jboolean      nextAvail = JNI_FALSE;
-    PyJObject    *pyjob     = (PyJObject*) self;
-    JNIEnv       *env       = pyembed_get_env();
+int pyjtype_setattro(PyTypeObject *type, PyObject *name, PyObject *v){
+    PyObject *descr;
 
-    if (!JNI_METHOD(itrHasNext, env, JITERATOR_TYPE, "hasNext", "()Z")) {
-        process_java_exception(env);
-        return NULL;
+    descr = _PyType_Lookup(type, name);
+
+     if (descr != NULL) {
+        descrsetfunc f = descr->ob_type->tp_descr_set;
+        if (f != NULL) {
+            Py_INCREF(descr);
+            int res = f(descr, type, v);
+            Py_DECREF(descr);
+            return res;
+        }
     }
 
-    nextAvail = (*env)->CallBooleanMethod(env, pyjob->object, itrHasNext);
-    if (process_java_exception(env)) {
-        return NULL;
-    }
-
-    if (nextAvail) {
-        jobject   nextItem;
-        PyObject* result;
-
-        if (!JNI_METHOD(itrNext, env, JITERATOR_TYPE, "next", "()Ljava/lang/Object;")) {
-            process_java_exception(env);
-            return NULL;
-        }
-        if ((*env)->PushLocalFrame(env, JLOCAL_REFS) != 0) {
-            process_java_exception(env);
-            return NULL;
-        }
-        nextItem = (*env)->CallObjectMethod(env, pyjob->object, itrNext);
-        if (process_java_exception(env)) {
-            (*env)->PopLocalFrame(env, NULL);
-            return NULL;
-        }
-
-        result = convert_jobject_pyobject(env, nextItem);
-        (*env)->PopLocalFrame(env, NULL);
-        return result;
-    }
-
-    return NULL;
+    PyErr_Format(PyExc_TypeError, "can't set non-field attributes of java wrapper type '%s'", type->tp_name);
+    return -1;
 }
 
-
-static PyMethodDef pyjiterator_methods[] = {
-    {NULL, NULL, 0, NULL}
-};
-
-
-/*
- * Inherits from PyJObject_Type
- */
-PyTypeObject PyJIterator_Type = {
+PyTypeObject PyJType_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "jep.PyJIterator",
-    0,//sizeof(PyJIteratorObject),
+    "jep.PyJType",
+    0,
     0,
     0,                                        /* tp_dealloc */
     0,                                        /* tp_print */
@@ -131,20 +77,20 @@ PyTypeObject PyJIterator_Type = {
     0,                                        /* tp_call */
     0,                                        /* tp_str */
     0,                                        /* tp_getattro */
-    0,                                        /* tp_setattro */
+    (setattrofunc) pyjtype_setattro,          /* tp_setattro */
     0,                                        /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,                       /* tp_flags */
-    "jiterator",                              /* tp_doc */
+    Py_TPFLAGS_DEFAULT,                       /* tp_flags */
+    "Type for Java wrapper classes",                                 /* tp_doc */
     0,                                        /* tp_traverse */
     0,                                        /* tp_clear */
     0,                                        /* tp_richcompare */
     0,                                        /* tp_weaklistoffset */
-    PyObject_SelfIter,                        /* tp_iter */
-    (iternextfunc) pyjiterator_next,          /* tp_iternext */
-    pyjiterator_methods,                      /* tp_methods */
+    0,                                        /* tp_iter */
+    0,                                        /* tp_iternext */
+    0,                                        /* tp_methods */
     0,                                        /* tp_members */
     0,                                        /* tp_getset */
-    0, // &PyJObject_Type                     /* tp_base */
+    0,                                        /* tp_base */
     0,                                        /* tp_dict */
     0,                                        /* tp_descr_get */
     0,                                        /* tp_descr_set */

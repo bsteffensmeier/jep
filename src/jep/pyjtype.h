@@ -26,32 +26,18 @@
    distribution.
 */
 
-#include "jep_platform.h"
-#include "pyjobject.h"
+/*
+ * A PyJClassObject is a PyJObject with a __call__ method attached, where
+ * the call method can invoke the Java object's constructors.
+ */
 
-#ifndef _Included_pyjfield
-#define _Included_pyjfield
+#ifndef _Included_pyjtype
+#define _Included_pyjtype
 
-PyAPI_DATA(PyTypeObject) PyJField_Type;
+PyAPI_FUNC(int) PyJType_Check(PyObject*);
 
-/* Represents a java field on a java object and allows getting and setting values */
-typedef struct {
-    PyObject_HEAD
-    jfieldID          fieldId;             /* Resolved fieldid */
-    jobject           rfield;              /* reflect/Field object */
-    jclass            fieldType;           /* field's type */
-    int               fieldTypeId;         /* field's typeid */
-    PyObject         *pyFieldName;         /* python name... :-) */
-    int               isStatic;            /* -1 if not known,
-                                              otherwise 1 or 0 */
-    int               init;                /* 1 if init performed */
-} PyJFieldObject;
+PyAPI_FUNC(jclass) PyJType_GetClass(PyObject*);
 
+PyAPI_DATA(PyTypeObject) PyJType_Type;
 
-PyJFieldObject* pyjfield_new(JNIEnv*, jobject);
-int pyjfield_check(PyObject*);
-
-PyObject* pyjfield_get(PyJFieldObject*, PyJObject*);
-int pyjfield_set(PyJFieldObject *self, PyJObject*, PyObject *value);
-
-#endif // ndef pyjfield
+#endif // ndef pyjtype
