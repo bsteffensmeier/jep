@@ -43,8 +43,6 @@ struct __JepThread {
     jobject        caller;      /* Jep instance that called us. */
     int            printStack;
     PyObject      *classNameToPyType;
-    PyObject      *fqnToPyJmethods; /* a dictionary of fully qualified Java
-                                       classnames to PyJMethods on the class */
 };
 typedef struct __JepThread JepThread;
 

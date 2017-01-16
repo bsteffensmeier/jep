@@ -402,7 +402,6 @@ intptr_t pyembed_thread_init(JNIEnv *env, jobject cl, jobject caller)
     jepThread->caller          = (*env)->NewGlobalRef(env, caller);
     jepThread->printStack      = 0;
     jepThread->classNameToPyType = NULL;
-    jepThread->fqnToPyJmethods = NULL;
 
     if ((tdict = PyThreadState_GetDict()) != NULL) {
         PyObject *key, *t;
@@ -445,8 +444,7 @@ void pyembed_thread_close(JNIEnv *env, intptr_t _jepThread)
     Py_DECREF(key);
 
     Py_CLEAR(jepThread->globals);
-    Py_CLEAR(jepThread->fqnToPyJmethods);
-    //Py_CLEAR(jepThread->classNameToPyType);
+    Py_CLEAR(jepThread->classNameToPyType);
     Py_CLEAR(jepThread->modjep);
 
     if (jepThread->classloader) {
@@ -1069,8 +1067,7 @@ void pyembed_setloader(JNIEnv *env, intptr_t _jepThread, jobject cl)
     }
 
     PyEval_AcquireThread(jepThread->tstate);
-    //Py_CLEAR(jepThread->classNameToPyType);
-    Py_CLEAR(jepThread->fqnToPyJmethods);
+    Py_CLEAR(jepThread->classNameToPyType);
 
     oldLoader = jepThread->classloader;
     if (oldLoader) {

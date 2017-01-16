@@ -40,8 +40,6 @@ static jmethodID objectEquals    = 0;
 static jmethodID objectHashCode  = 0;
 static jmethodID compareTo       = 0;
 
-static PyTypeObject *baseType = NULL;
-
 /*
  * MSVC requires tp_base to be set at runtime instead of in
  * the type declaration. :/  Since we are building an
@@ -54,9 +52,6 @@ static PyTypeObject *baseType = NULL;
  */
 static void pyjobject_init_subtypes(void)
 {
-    baseType = PyMem_Malloc(sizeof(PyTypeObject));
-    memcpy(baseType, &PyJObject_Type, sizeof(PyTypeObject));
-        
     if (!PyJType_Type.tp_base) {
         PyJType_Type.tp_base = &PyType_Type;
     }

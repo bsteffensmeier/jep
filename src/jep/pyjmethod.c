@@ -284,19 +284,12 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
 
     }
     instance = (PyJObject*) firstArg;
-
     // validate we can call this method
-    if(self->isStatic == JNI_TRUE){
-        if (!(*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
-            instance = (PyJObject*) PyObject_GetAttrString((PyObject*) instance, "__java_class__");
-        }
-    }else{
-    if ((*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
+    if (0 && (*env)->IsSameObject(env, instance->clazz, JCLASS_TYPE)) {
         PyErr_Format(PyExc_RuntimeError,
                      "Instantiate this class before "
                      "calling an object method.");
         return NULL;
-    }
     }
 
     jargs = (jvalue *) PyMem_Malloc(sizeof(jvalue) * self->lenParameters);
@@ -477,16 +470,17 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
                       self->methodId,
                       jargs);
         }else {
-            if (!instance->object)
+            if (!instance->object){
                 ret = (*env)->CallIntMethodA(env,
                                              instance->clazz,
                                              self->methodId,
                                              jargs);
-            else
+            }else{
                 ret = (*env)->CallIntMethodA(env,
                                              instance->object,
                                              self->methodId,
                                              jargs);
+            }
         }
 
         Py_BLOCK_THREADS;
@@ -764,12 +758,16 @@ EXIT_ERROR:
 }
 
 static PyObject* pyjmethod_descr_get(PyObject *func, PyObject *obj, PyObject *type){
-    //printf("%s\n", PyString_AsString(((PyJMethodObject*) func)->pyMethodName));
-    if (obj == Py_None){
-        obj = NULL;
+    PyJMethodObject* method = (PyJMethodObject*) func;
+    if (!method->parameters){
+        JNIEnv* env = pyembed_get_env();
+        if(!pyjmethod_init(env, method)) {
+            return NULL;
+        }
     }
-    if(!obj){
+    if(method->isStatic){
         obj = PyObject_GetAttrString(type, "__java_class__");
+        type = (PyObject*) &PyJClass_Type;
     }
 #if PY_MAJOR_VERSION >= 3
     return PyMethod_New(func, obj);
@@ -824,7 +822,7 @@ PyTypeObject PyJMethod_Type = {
     0,                                        /* tp_getset */
     0,                                        /* tp_base */
     0,                                        /* tp_dict */
-    pyjmethod_descr_get,                      /* tp_descr_get */
+    (descrgetfunc) pyjmethod_descr_get,       /* tp_descr_get */
     0,                                        /* tp_descr_set */
     0,                                        /* tp_dictoffset */
     0,                                        /* tp_init */
