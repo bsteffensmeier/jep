@@ -35,6 +35,11 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include "numpy/arrayobject.h"
 
+/*
+ * 0  means we haven't tried to use numpy
+ * 1  means it is initialized
+ * -1 means we tried to initialize and failed.
+ */
 static int numpyInitialized = 0;
 
 /* internal method */
@@ -85,23 +90,50 @@ static void _init_numpy(void)
 }
 #endif // Python 3 compatibility
 
+/*
+ * Attempt to initialize numpy. This can be called multiple times and it will
+ * not attempt to initalize numpy if it is already initialized. This will set
+ * a python error if inititialization fails.
+ *
+ * @return true if it is safe to use numpy, false if initialization failed.
+ */
 static int init_numpy(void)
 {
-    if (!numpyInitialized) {
+    if (numpyInitialized != 1) {
         _init_numpy();
-        if (!PyErr_Occurred()) {
+        if (PyErr_Occurred()) {
+            numpyInitialized = -1;
+        } else {
             numpyInitialized = 1;
         }
     }
-    return numpyInitialized;
+    return numpyInitialized == 1;
 }
 
 
 int npy_array_check(PyObject *obj)
 {
-    if (!init_numpy()) {
-        PyErr_Clear();
+    /*
+     * If jep was built with numpy support but used without numpy installed
+     * then do not raise errors and just return false here.
+     */
+    if (numpyInitialized == -1) {
         return 0;
+    } else if (numpyInitialized == 0) {
+        /*
+         * Do not init_numpy if the numpy module has not been used. init_numpy
+         * prints errors and we want to handle this case silently
+         */
+        PyObject* modDict = PyImport_GetModuleDict();
+        PyObject * numpyMod = PyDict_GetItemString(modDict, "numpy");
+        if (numpyMod) {
+            if (!init_numpy()) {
+                PyErr_Clear();
+                return 0;
+            }
+        } else {
+            return 0;
+        }
     }
     return PyArray_Check(obj);
 }
