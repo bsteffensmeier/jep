@@ -3,16 +3,6 @@ import unittest
 
 class TestDir(unittest.TestCase):
 
-    def setUp(self):
-        # need to clear out these modules to be safe, because certain versions
-        # of the import hook may eagerly import extra packages or classes and
-        # cause an inaccurate test result
-        import sys
-        toRemove = ['java', 'java.util', 'java.lang']
-        for n in toRemove:
-            if n in sys.modules:
-                sys.modules.pop(n)
-
     def test_dir_arraylist(self):
         from java.util import ArrayList
         x = ArrayList()
