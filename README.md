@@ -1,18 +1,11 @@
-.. image:: https://img.shields.io/pypi/pyversions/Jep.svg
-    :target: https://pypi.python.org/pypi/jep
-
-.. image:: https://img.shields.io/pypi/l/Jep.svg
-    :target: https://pypi.python.org/pypi/jep
-
-.. image:: https://img.shields.io/pypi/v/Jep.svg
-    :target: https://pypie.python.org/pypi/jep
-	
-.. image:: https://img.shields.io/badge/docs-wiki-orange.svg
-    :target: https://github.com/ninia/jep/wiki
-
-
 Jep - Java Embedded Python
 ===========================
+
+[![Python: 2.7, 3.3, 3.4, 3.5, 3.6](https://img.shields.io/pypi/pyversions/Jep.svg)](https://pypi.python.org/pypi/jep)
+[![License: zlib/libpng](https://img.shields.io/pypi/l/Jep.svg)](https://pypi.python.org/pypi/jep)
+[![Pypi: v3.7.1](https://img.shields.io/pypi/v/Jep.svg)](https://pypie.python.org/pypi/jep)
+[![Docs: wiki](https://img.shields.io/badge/docs-wiki-orange.svg)](https://github.com/ninia/jep/wiki)
+[![Docs: JavaDoc](https://img.shields.io/badge/docs-javadoc-orange.svg)](javadoc/latest)
 
 Jep embeds CPython in Java through JNI.
 
