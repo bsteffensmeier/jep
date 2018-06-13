@@ -48,7 +48,7 @@ Notable features
 Help
 ----
 * [Documentation](https://github.com/ninia/jep/wiki)
-* [JavadocDoc](javadoc)
+* [JavaDoc](javadoc)
 * [Mailing List](https://groups.google.com/d/forum/jep-project)
 * [Known Issues](https://github.com/ninia/jep/issues)
 * [Project Page](https://github.com/ninia/jep)
