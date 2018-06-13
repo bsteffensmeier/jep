@@ -5,7 +5,7 @@ Jep - Java Embedded Python
 [![License: zlib/libpng](https://img.shields.io/pypi/l/Jep.svg)](https://pypi.python.org/pypi/jep)
 [![Pypi: v3.7.1](https://img.shields.io/pypi/v/Jep.svg)](https://pypie.python.org/pypi/jep)
 [![Docs: wiki](https://img.shields.io/badge/docs-wiki-orange.svg)](https://github.com/ninia/jep/wiki)
-[![Docs: JavaDoc](https://img.shields.io/badge/docs-javadoc-orange.svg)](javadoc/latest)
+[![Docs: JavaDoc](https://img.shields.io/badge/docs-javadoc-orange.svg)](javadoc/3.8)
 
 Jep embeds CPython in Java through JNI.
 
