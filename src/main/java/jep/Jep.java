@@ -68,17 +68,11 @@ public class Jep implements Interpreter {
     // used by default if not passed/set by caller
     private ClassLoader classLoader = null;
 
-    // eval() storage.
-    private StringBuilder evalLines = null;
-
-    private boolean interactive = false;
-
     private final MemoryManager memoryManager = new MemoryManager();
 
     private final boolean isSubInterpreter;
 
-    // windows requires this as unix newline...
-    private static final String LINE_SEP = "\n";
+    private InteractiveEvaluator interactive;
 
     /**
      * Tracks if this thread has been used for an interpreter before. Using
@@ -274,12 +268,15 @@ public class Jep implements Interpreter {
         boolean hasSharedModules = config.sharedModules != null
                 && !config.sharedModules.isEmpty();
 
-        this.interactive = config.interactive;
+
         this.tstate = init(this.classLoader, hasSharedModules,
                 useSubInterpreter);
         threadUsed.set(true);
         this.thread = Thread.currentThread();
         configureInterpreter(config);
+        if (config.interactive) {
+            this.interactive = new InteractiveEvaluator(this);
+        }
     }
 
     protected void configureInterpreter(JepConfig config) throws JepException {
@@ -426,47 +423,20 @@ public class Jep implements Interpreter {
 
     @Override
     public boolean eval(String str) throws JepException {
-        isValidThread();
-
-        try {
-            // trim windows \r\n
-            if (str != null) {
-                str = str.replaceAll("\r", "");
-            }
-
+        // trim windows \r\n
+        if (str != null) {
+            str = str.replaceAll("\r", "");
+        }
+        if (this.interactive != null) {
+            return this.interactive.eval(str);
+        } else {
             if (str == null || str.trim().equals("")) {
-                if (!this.interactive) {
-                    return false;
-                }
-                if (this.evalLines == null) {
-                    return true; // nothing to eval
-                }
-
-                // null means we send lines, whether or not it compiles.
-                eval(this.tstate, this.evalLines.toString());
-                this.evalLines = null;
-                return true;
+                return false;
             }
-
-            // first check if it compiles by itself
-            if (!this.interactive || (this.evalLines == null
-                    && compileString(this.tstate, str) == 1)) {
-                eval(this.tstate, str);
-                return true;
-            }
-
-            // doesn't compile on it's own, append to eval
-            if (this.evalLines == null) {
-                this.evalLines = new StringBuilder();
-            } else {
-                evalLines.append(LINE_SEP);
-            }
-            evalLines.append(str);
-
-            return false;
-        } catch (JepException e) {
-            this.evalLines = null;
-            throw e;
+            // TODO this is supposed to be getValue(str) but getValue won't
+	    // exec imports like the old eval did.
+            exec(str);
+	    return true;
         }
     }
 
@@ -560,7 +530,15 @@ public class Jep implements Interpreter {
      */
     @Deprecated
     public void setInteractive(boolean v) {
-        this.interactive = v;
+	if (v && this.interactive == null) {
+            try {
+                this.interactive = new InteractiveEvaluator(this);
+	    } catch (JepException e) {
+                throw new IllegalStateException("Invalid interpreter state.", e);
+	    }
+        } else {
+            this.interactive = null;
+        }
     }
 
     /**
@@ -572,7 +550,7 @@ public class Jep implements Interpreter {
      */
     @Deprecated
     public boolean isInteractive() {
-        return this.interactive;
+        return this.interactive != null;
     }
 
     @Override
