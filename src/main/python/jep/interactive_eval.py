@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011-2018 JEP AUTHORS.
+# Copyright (c) 2019 JEP AUTHORS.
 #
 # This file is licensed under the the zlib/libpng License.
 #
@@ -23,11 +23,24 @@
 #     distribution.
 #
 
-try:
-    from _jep import *
-except ImportError:
-    raise ImportError("Jep is not supported in standalone Python, it must be embedded in Java.")
-from .version import __VERSION__, VERSION
-from .java_import_hook import *
-from .shared_modules_hook import *
-from .interactive_eval import *
+class interactive_eval(object):
+    def __init__(self, g_dict):
+        self.g_dict = g_dict
+        self.evalLines = []
+    def __call__(self, line):
+        if not line:
+            if self.evalLines:
+                code = "\n".join(self.evalLines)
+                self.evalLines = None
+                exec(compile(code, '<stdin>', 'single'), self.g_dict, self.g_dict)
+            return True
+        elif not self.evalLines:
+            try:
+                exec(compile(line, '<stdin>', 'single'), self.g_dict, self.g_dict)
+                return True
+            except SyntaxError as err:
+                self.evalLines = [line]
+                return False
+        else:
+            self.evalLines.append(line)
+            return False

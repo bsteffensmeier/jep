@@ -72,7 +72,7 @@ public class Jep implements Interpreter {
 
     private final boolean isSubInterpreter;
 
-    private InteractiveEvaluator interactive;
+    private InteractiveEvaluator2 interactive;
 
     /**
      * Tracks if this thread has been used for an interpreter before. Using
@@ -275,7 +275,7 @@ public class Jep implements Interpreter {
         this.thread = Thread.currentThread();
         configureInterpreter(config);
         if (config.interactive) {
-            this.interactive = new InteractiveEvaluator(this);
+            this.interactive = InteractiveEvaluator2.create(this);
         }
     }
 
@@ -532,7 +532,7 @@ public class Jep implements Interpreter {
     public void setInteractive(boolean v) {
 	if (v && this.interactive == null) {
             try {
-                this.interactive = new InteractiveEvaluator(this);
+                this.interactive = InteractiveEvaluator2.create(this);
 	    } catch (JepException e) {
                 throw new IllegalStateException("Invalid interpreter state.", e);
 	    }

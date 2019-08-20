@@ -27,6 +27,7 @@ from __future__ import print_function
 import traceback
 import os
 import sys
+from .interactive_eval import *
 
 history_file = None
 
@@ -86,28 +87,8 @@ if has_readline:
 PS1 = ">>> "
 PS2 = "... "
 
-evalLines = []
-
-def jepeval(line):
-    global evalLines
-    if not line:
-        if evalLines:
-            code = "\n".join(evalLines)
-            evalLines = None
-            exec(compile(code, '<stdin>', 'single'), globals(), globals())
-        return True
-    elif not evalLines:
-        try:
-            exec(compile(line, '<stdin>', 'single'), globals(), globals())
-            return True
-        except SyntaxError as err:
-            evalLines = [line]
-            return False
-    else:
-        evalLines = evalLines.append(line)
-        return False
-
 def prompt(jep):
+    jepeval = interactive_eval(globals())
     try:
         line = None
         while True:
