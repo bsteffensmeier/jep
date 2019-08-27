@@ -11,9 +11,7 @@ assignees: ''
 A clear and concise description of what the problem is.
 
 **Search for existing solutions**
-Testing the build of Jep on the variety of possible platforms and environments
-is difficult. It works well for Linux and OS X.  Building on Windows poses
-unique challenges that have been documented on the [Windows wiki page](https://github.com/mrj0/jep/wiki/Windows). Please search for a similar problem and solution on both the [mailing list](https://groups.google.com/forum/#!forum/jep-project) and the existing closed github issues.
+The Jep build is automatically tested and confirmed to be working in Linux, OS X, and Windows using Travis and AppVeyor. We cannot possibly test every environment so we rely on the community to document any issues and solutions in other environments. Please search for a similar problem and solution on both the [mailing list](https://groups.google.com/forum/#!forum/jep-project) and the existing closed github issues before opening a new issue.
 
 **Environment (please complete the following information):**
 - OS Platform, Distribution, and Version:
