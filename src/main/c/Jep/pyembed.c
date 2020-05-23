@@ -406,8 +406,9 @@ void pyembed_startup(JNIEnv *env, jobjectArray sharedModulesArgv)
     }
 
     Py_Initialize();
+#if PY_MAJOR_VERSION <= 3 && PY_MINOR_VERSION < 9
     PyEval_InitThreads();
-
+#endif
     if (pyjtypes_ready()) {
         handle_startup_exception(env, "Failed to initialize PyJTypes");
         return;
@@ -827,13 +828,21 @@ void pyembed_thread_close(JNIEnv *env, intptr_t _jepThread)
     }
     if (jepThread->tstate->interp == mainThreadState->interp) {
         PyThreadState_Clear(jepThread->tstate);
-        PyThreadState_Swap(NULL);
+        PyEval_ReleaseThread(jepThread->tstate);
         PyThreadState_Delete(jepThread->tstate);
     } else {
         Py_EndInterpreter(jepThread->tstate);
+#if PY_MAJOR_VERSION <= 3 && PY_MINOR_VERSION < 9
+	PyEval_ReleaseLock();
+#else
+	// This thread state should not be valid on this thread but
+	// PyEval_ReleaseThread is crashing in Python3.9b1 and there
+	// is no other way I have found to release the GIL
+	PyThreadState_Swap(mainThreadState);
+        PyEval_ReleaseThread(mainThreadState);
+#endif
     }
     free(jepThread);
-    PyEval_ReleaseLock();
 }
 
 
