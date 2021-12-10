@@ -4,7 +4,7 @@ patched version of the msvc9compiler.
 """
 
 import os.path
-from distutils.command.build_ext import build_ext as old_build_ext
+from setuptools.command.build_ext import build_ext as old_build_ext
 
 
 class build_ext (old_build_ext):
@@ -21,15 +21,15 @@ class build_ext (old_build_ext):
         from commands.util import is_windows
         if is_windows():
             import sys
-            import distutils
-            import distutils.ccompiler
+            import setuptools
+            import setuptools.ccompiler
             from commands import _msvccompiler
 
             # See commands.msvc9compiler method comments for information on
             # this override.
-            distutils.ccompiler.compiler_class['msvc'] = (
+            setuptools.ccompiler.compiler_class['msvc'] = (
                 'jepmsvccompiler', 'MSVCCompiler', "Microsoft Visual C++")
-            sys.modules['distutils.jepmsvccompiler'] = _msvccompiler
+            sys.modules['setuptools.jepmsvccompiler'] = _msvccompiler
         old_build_ext.run(self)
 
         # copy the jep.pyd to jep.dll early to avoid confusion

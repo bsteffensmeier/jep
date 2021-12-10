@@ -5,12 +5,13 @@ the jep interpreter can be run from the command line.
 """
 
 import os
+import sysconfig
+
 from stat import ST_MODE
-from distutils.core import Command
-from distutils.dep_util import newer
-from distutils.util import convert_path
-from distutils import log
-from distutils import sysconfig
+from setuptools import Command
+from setuptools._distutils.dep_util import newer
+from setuptools._distutils.util import convert_path
+from setuptools._distutils import log
 from commands.util import is_osx
 from commands.util import is_windows
 from commands.python import get_libpython

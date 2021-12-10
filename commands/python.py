@@ -1,8 +1,8 @@
-from distutils import sysconfig
 from commands.util import is_osx
 from commands.util import is_windows
 from commands.util import is_bsd
 import os
+import sysconfig
 
 
 def get_python_libs():

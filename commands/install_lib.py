@@ -8,7 +8,7 @@ from commands.util import is_osx
 from commands.util import is_windows
 from commands.link_util import link_native_lib
 from commands.python import get_python_lib_dir
-from distutils.command.install_lib import install_lib
+from setuptools.command.install_lib import install_lib
 import os
 
 

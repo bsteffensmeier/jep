@@ -7,9 +7,9 @@ following problems:
   4. Better vcvarsall detection to support Microsoft Visual C++ Compiler for Python 2.7
 """
 
-import distutils
-from distutils import msvc9compiler as old_msvc_module
-from distutils.msvc9compiler import MSVCCompiler as old_MSVCCompiler
+import setuptools
+from setuptools import msvc9compiler as old_msvc_module
+from setuptools.msvc9compiler import MSVCCompiler as old_MSVCCompiler
 
 VCVARSALL_LOCATIONS = (
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat",
@@ -83,7 +83,7 @@ class MSVCCompiler(old_MSVCCompiler):
 def find_vcvarsall(version):
     import os
 
-    Reg = distutils.msvc9compiler.Reg
+    Reg = setuptools.msvc9compiler.Reg
     VC_BASE = r'Software\%sMicrosoft\DevDiv\VCForPython\%0.1f'
     key = VC_BASE % ('', version)
     try:
@@ -108,7 +108,7 @@ def find_vcvarsall(version):
         if retVal:
             return retVal
 
-        from distutils import _msvccompiler
+        from setuptools import _msvccompiler
         retVal, _ = _msvccompiler._find_vcvarsall(version)
         if retVal:
             return retVal

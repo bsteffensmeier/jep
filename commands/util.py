@@ -1,6 +1,6 @@
 from __future__ import print_function
 from collections import namedtuple
-from distutils.util import get_platform
+from setuptools._distutils.util import get_platform
 import subprocess
 import sys
 

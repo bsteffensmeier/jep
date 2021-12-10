@@ -4,7 +4,7 @@ following problems:
   1. Skip exporting the default init<module> method since Jep already has one
 """
 
-from distutils._msvccompiler import MSVCCompiler as python_MSVCCompiler
+from setuptools._msvccompiler import MSVCCompiler as python_MSVCCompiler
 
 
 class MSVCCompiler(python_MSVCCompiler):

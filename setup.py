@@ -7,10 +7,7 @@ import os
 
 import sysconfig
 
-from distutils.core import setup, Extension
-# if you want to build wheels, use setuptools instead of distutils
-# otherwise stick with distutils to avoid extra dependencies
-#from setuptools import setup, Extension
+from setuptools import setup, Extension
 
 from commands import jep_build
 from commands.clean import really_clean
@@ -137,5 +134,6 @@ if __name__ == '__main__':
               'clean': really_clean,
               'test': test,
           },
+          zip_safe=False
     )
 

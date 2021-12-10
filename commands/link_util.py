@@ -4,12 +4,11 @@ Helper functions for linking and finding libraries.
 
 from commands.util import is_osx
 from commands.util import is_windows
-from distutils import sysconfig
-from distutils.spawn import spawn
+
 import os
 import os.path
 import shutil
-
+import subprocess
 
 def link_native_lib(output_dir, jep_lib_path):
     """
@@ -36,7 +35,7 @@ def link_native_lib(output_dir, jep_lib_path):
         # Apple says to put the file at /Library/Java/Extensions/libjep.jnilib,
         # which is good for a permanent install but not so good when using
         # virtualenv or testing.
-        spawn(['ln',
+        subprocess.run(['ln',
                '-sf',
                '{0}'.format(jep_lib),
                '{0}'.format(os.path.join(output_dir, 'libjep.jnilib')), ])
@@ -44,7 +43,7 @@ def link_native_lib(output_dir, jep_lib_path):
     else:
         # Otherwise, distutils outputs 'jep.so' which needs to be linked
         # to 'libjep.so'. Otherwise the JVM will not find the library.
-        spawn(['ln',
+        subprocess.run(['ln',
                '-sf',
                '{0}'.format(jep_lib),
                '{0}'.format(os.path.join(output_dir, 'libjep.so')),

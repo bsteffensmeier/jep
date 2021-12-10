@@ -1,5 +1,4 @@
-from __future__ import print_function
-from distutils.command.build import build
+from setuptools._distutils.command.build import build
 from commands.java import build_java
 
 

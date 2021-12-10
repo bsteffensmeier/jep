@@ -1,7 +1,5 @@
-from __future__ import print_function
-from distutils.cmd import Command
-from distutils import sysconfig
-from distutils.errors import DistutilsExecError
+from setuptools import Command
+from setuptools._distutils.errors import DistutilsExecError
 from commands.util import configure_error
 from commands.util import is_osx
 from commands.util import is_windows
@@ -11,6 +9,7 @@ from commands.java import get_java_home
 import os
 import os.path
 import sys
+import sysconfig
 
 
 class test(Command):
@@ -86,4 +85,4 @@ class test(Command):
         p = subprocess.Popen(args, env=environment)
         rc = p.wait()
         if rc != 0:
-            raise DistutilsExecError("Unit tests failed with exit status %d" % (rc))
+            raise ExecError("Unit tests failed with exit status %d" % (rc))
