@@ -137,7 +137,7 @@ static PyObject* jnumber_As_PyObject(JNIEnv *env, jobject jobj, jclass class)
         }
         PyObject* pyint = PyLong_FromUnicodeObject(pystr, 10);
         Py_DECREF(pystr);
-	return pyint;
+        return pyint;
     } else {
         return jobject_As_PyJObject(env, jobj, class);
     }
@@ -161,6 +161,20 @@ PyObject* jobject_As_PyJObject(JNIEnv *env, jobject jobj, jclass class)
     }
     PyObject* result = PyJObject_New(env, type, jobj, class);
     Py_DECREF(type);
+    if (result) {
+        // TODO GetAttr would be faster than GetAttrString
+        PyObject* topy = PyObject_GetAttrString(result, "_to_python");
+        if (topy != NULL) {
+            Py_DECREF(result);
+            // TODO Don't make a new tuple all the time.
+            PyObject* args = PyTuple_New(0);
+            result = PyObject_Call(topy, args, NULL);
+            Py_DECREF(args);
+            Py_DECREF(topy);
+        } else {
+            PyErr_Clear();
+        }
+    }
     return result;
 }
 
