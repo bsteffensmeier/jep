@@ -65,5 +65,6 @@ PyObject* jstring_As_PyString(JNIEnv*, jstring);
  */
 PyObject* jobject_As_PyString(JNIEnv*, jobject);
 
+int load_conversions(JNIEnv*);
 
 #endif // ifndef _Included_convert_j2p

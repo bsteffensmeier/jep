@@ -1,5 +1,7 @@
 package jep.test;
 
+import java.math.BigInteger;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -103,6 +105,20 @@ public class TestConversionConfig {
 	     * Honestly implementing _to_python in java might be a bad pattern, I really like doing
 	     * it from python better.
 	     */
+
+
+	    /* We can remove or reassign the default conversions that come with jep */
+	    /* Disable BigInteger->int conversion*/
+	    interp.exec("from java.math import BigInteger");
+	    interp.exec("del BigInteger.__pytype__._to_python");
+	    BigInteger bi = new BigInteger("10");
+	    interp.set("bi", bi);
+	    interp.exec("bi.pow(7)");
+	    /* Enable BigInteger->string conversion */
+	    interp.exec("BigInteger.__pytype__._to_python = BigInteger.__pytype__.toString");
+	    interp.set("bi", bi);
+	    interp.exec("t = '[' + bi + ']'");
+
         }
     }
 

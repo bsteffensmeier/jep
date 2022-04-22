@@ -187,6 +187,7 @@ static int initjep(JNIEnv *env, jboolean hasSharedModules)
             Py_DECREF(modjep);
             return -1;
         }
+	load_conversions(env);
         if (hasSharedModules) {
             Py_INCREF(mainThreadModules);
             PyModule_AddObject(modjep, "mainInterpreterModules", mainThreadModules);
@@ -811,7 +812,13 @@ static PyObject* pyembed_jproxy(PyObject *self, PyObject *args)
     Py_INCREF(pytarget);
 
     jclass clazz = (*env)->GetObjectClass(env, proxy);
-    result = jobject_As_PyJObject(env, proxy, clazz);
+    PyTypeObject* type = PyJType_Get(env, clazz);
+    if (!type) {
+        return NULL;
+    }
+    result = PyJObject_New(env, type, proxy, clazz);
+    Py_DECREF(type);
+
     (*env)->DeleteLocalRef(env, clazz);
     (*env)->DeleteLocalRef(env, proxy);
     return result;
