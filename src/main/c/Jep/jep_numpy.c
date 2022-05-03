@@ -197,26 +197,6 @@ int npy_array_check(PyObject *obj)
     return PyArray_Check(obj);
 }
 
-
-/*
- * Checks if a jobject is an instance of a jep.NDArray
- *
- * @param env   the JNI environment
- * @param obj   the jobject to check
- *
- * @return true if it is an NDArray and jep was compiled with numpy support,
- *          otherwise false
- */
-int jndarray_check(JNIEnv *env, jobject obj)
-{
-    int ret = (*env)->IsInstanceOf(env, obj, JEP_NDARRAY_TYPE);
-    if (process_java_exception(env)) {
-        return JNI_FALSE;
-    }
-
-    return ret;
-}
-
 /*
  * Checks if a jobject is an instance of a jep.DirectNDArray
  *
@@ -235,7 +215,6 @@ int jdndarray_check(JNIEnv *env, jobject obj)
 
     return ret;
 }
-
 
 /*
  * Converts a numpy ndarray to a Java primitive array.
@@ -342,7 +321,7 @@ static jarray convert_pyndarray_jprimitivearray(JNIEnv* env,
  * This will return the jep.DirectNDArray that was used to create the provided
  * PyArrayObject or null if the array was not created from a jep.DirectNDArray.
  */
-jobject get_base_jdndarray_from_pyndarray(JNIEnv *env, PyObject *pyobj)
+static jobject get_base_jdndarray_from_pyndarray(JNIEnv *env, PyObject *pyobj)
 {
     PyObject *base = NULL;
     jobject jbase  = NULL;
@@ -453,7 +432,8 @@ static jobject convert_pyndarray_jndarray(JNIEnv *env, PyObject *pyobj)
     return result;
 }
 
-PyObject* convert_jdirectbuffer_pyndarray(JNIEnv *env, jobject jo, int ndims,
+static PyObject* convert_jdirectbuffer_pyndarray(JNIEnv *env, jobject jo,
+        int ndims,
         npy_intp *dims, int usigned)
 {
     int typenum;
@@ -520,7 +500,7 @@ PyObject* convert_jdirectbuffer_pyndarray(JNIEnv *env, jobject jo, int ndims,
     return pyob;
 }
 
-PyObject* convert_jdndarray_pyndarray(JNIEnv *env, PyObject* pyobj)
+static PyObject* convert_jdndarray_pyndarray(JNIEnv *env, PyObject* pyobj)
 {
     jobject    obj     = NULL;
     npy_intp  *dims    = NULL;
@@ -618,7 +598,7 @@ PyObject* convert_jdndarray_pyndarray(JNIEnv *env, PyObject* pyobj)
  *
  * @return an ndarray of matching dtype and dimensions
  */
-PyObject* convert_jprimitivearray_pyndarray(JNIEnv *env,
+static PyObject* convert_jprimitivearray_pyndarray(JNIEnv *env,
         jobject jo,
         int ndims,
         npy_intp *dims,
@@ -673,7 +653,7 @@ PyObject* convert_jprimitivearray_pyndarray(JNIEnv *env,
  *
  * @return       a numpy ndarray, or NULL if there were errors
  */
-PyObject* convert_jndarray_pyndarray(JNIEnv *env, jobject obj)
+static PyObject* convert_jndarray_pyndarray(JNIEnv *env, jobject obj)
 {
     npy_intp  *dims    = NULL;
     jobject    jdimObj = NULL;
@@ -772,6 +752,35 @@ jobject convert_pyndarray_jobject(JNIEnv* env, PyObject* pyobject,
     }
 }
 
-#endif // if numpy support is enabled
+static PyObject* pyjndarray_As_PyNDArray(PyObject* self, PyObject* unused)
+{
+    JNIEnv *env = pyembed_get_env();
+    jobject this = ((PyJObject*) self)->object;
+    return convert_jndarray_pyndarray(env, this);
+}
 
+static PyMethodDef pyjndarray_As_PyNDArray_def = { "_to_python", pyjndarray_As_PyNDArray, METH_NOARGS, "Convert a Java NDArray to a Python NDArray"};
+
+static PyObject* pyjdndarray_As_PyNDArray(PyObject* self, PyObject* unused)
+{
+    JNIEnv *env = pyembed_get_env();
+    Py_INCREF(self);
+    return convert_jdndarray_pyndarray(env, self);
+}
+
+static PyMethodDef pyjdndarray_As_PyNDArray_def = { "_to_python", pyjdndarray_As_PyNDArray, METH_NOARGS, "Convert a Java DirectNDArray to a Python NDArray"};
+
+int load_numpy_conversions(JNIEnv* env)
+{
+    if (set_to_python_from_method_def(env, JEP_NDARRAY_TYPE,
+                                      &pyjndarray_As_PyNDArray_def)) {
+        return -1;
+    }
+    if (set_to_python_from_method_def(env, JEP_DNDARRAY_TYPE,
+                                      &pyjdndarray_As_PyNDArray_def)) {
+        return -1;
+    }
+    return 0;
+}
+#endif // if numpy support is enabled
 

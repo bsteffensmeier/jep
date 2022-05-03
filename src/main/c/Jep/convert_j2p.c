@@ -85,16 +85,13 @@ PyObject* jobject_As_PyJObject(JNIEnv *env, jobject jobj, jclass class)
     PyObject* result = PyJObject_New(env, type, jobj, class);
     Py_DECREF(type);
     if (result) {
-        // TODO GetAttr would be faster than GetAttrString
         PyObject* topy = PyObject_GetAttrString(result, "_to_python");
         if (topy != NULL) {
             Py_DECREF(result);
-            // TODO Don't make a new tuple all the time.
-            PyObject* args = PyTuple_New(0);
-            result = PyObject_Call(topy, args, NULL);
-            Py_DECREF(args);
+            result = PyObject_CallObject(topy, NULL);
             Py_DECREF(topy);
         } else {
+            /* This is exactly what is done in PyObject_HasAttr. */
             PyErr_Clear();
         }
     }
@@ -136,123 +133,27 @@ static PyMethodDef jbigint_As_PyLong_def = { "_to_python", jbigint_As_PyLong, ME
 
 static PyObject* pyjstring_As_PyString(PyObject* self, PyObject* unused)
 {
-    if (!PyType_IsSubtype(Py_TYPE(self), &PyJObject_Type)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on non-java object.");
-        return NULL;
-    }
-    PyJObject* this = (PyJObject*) self;
-    if (this->object == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on class object.");
-        return NULL;
-    }
     JNIEnv *env = pyembed_get_env();
-    if (!(*env)->IsSameObject(env, this->clazz, JSTRING_TYPE)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion, expected String.");
-        return NULL;
-    }
-    return jstring_As_PyString(env, this->object);
+    jobject this = ((PyJObject*) self)->object;
+    return jstring_As_PyString(env, this);
 }
 
 static PyMethodDef pyjstring_As_PyString_def = { "_to_python", pyjstring_As_PyString, METH_NOARGS, "Convert a Java String into a Python string"};
 
 static PyObject* pyjjpyobject_As_PyObject(PyObject* self, PyObject* unused)
 {
-    if (!PyType_IsSubtype(Py_TYPE(self), &PyJObject_Type)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on non-java object.");
-        return NULL;
-    }
-    PyJObject* this = (PyJObject*) self;
-    if (this->object == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on class object.");
-        return NULL;
-    }
     JNIEnv *env = pyembed_get_env();
-    if (!(*env)->IsSameObject(env, this->clazz, JPYOBJECT_TYPE)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion, expected PyJObject.");
-        return NULL;
-    }
-    return JPyObject_As_PyObject(env, this->object);
+    jobject this = ((PyJObject*) self)->object;
+    return JPyObject_As_PyObject(env, this);
 }
 
 static PyMethodDef pyjjpyobject_As_PyObject_def = { "_to_python", pyjjpyobject_As_PyObject, METH_NOARGS, "Unwrap a PyJObject"};
 
-#if JEP_NUMPY_ENABLED
-static PyObject* pyjndarray_As_PyNDArray(PyObject* self, PyObject* unused)
-{
-    if (!PyType_IsSubtype(Py_TYPE(self), &PyJObject_Type)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on non-java object.");
-        return NULL;
-    }
-    PyJObject* this = (PyJObject*) self;
-    if (this->object == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on class object.");
-        return NULL;
-    }
-    JNIEnv *env = pyembed_get_env();
-    if (!jndarray_check(env, this->object)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion, expected NDArray.");
-        return NULL;
-    }
-    return convert_jndarray_pyndarray(env, this->object);
-}
-
-static PyMethodDef pyjndarray_As_PyNDArray_def = { "_to_python", pyjndarray_As_PyNDArray, METH_NOARGS, "Convert a Java NDArray to a Python NDArray"};
-
-static PyObject* pyjdndarray_As_PyNDArray(PyObject* self, PyObject* unused)
-{
-    if (!PyType_IsSubtype(Py_TYPE(self), &PyJObject_Type)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on non-java object.");
-        return NULL;
-    }
-    PyJObject* this = (PyJObject*) self;
-    if (this->object == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on class object.");
-        return NULL;
-    }
-    JNIEnv *env = pyembed_get_env();
-    if (!jdndarray_check(env, this->object)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion, expected DirectNDArray.");
-        return NULL;
-    }
-    Py_INCREF(self);
-    return convert_jdndarray_pyndarray(env, self);
-}
-
-static PyMethodDef pyjdndarray_As_PyNDArray_def = { "_to_python", pyjdndarray_As_PyNDArray, METH_NOARGS, "Convert a Java DirectNDArray to a Python NDArray"};
-#endif
-
 static PyObject* pyjproxy_As_PyObject(PyObject* self, PyObject* unused)
 {
-    if (!PyType_IsSubtype(Py_TYPE(self), &PyJObject_Type)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on non-java object.");
-        return NULL;
-    }
-    PyJObject* this = (PyJObject*) self;
-    if (this->object == NULL) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion on class object.");
-        return NULL;
-    }
     JNIEnv *env = pyembed_get_env();
-    if (!(*env)->IsAssignableFrom(env, this->clazz, JAVA_PROXY_TYPE)) {
-        PyErr_SetString(PyExc_TypeError,
-                        "Invalid Java->Python conversion, expected Proxy.");
-        return NULL;
-    }
-    jobject jpyObject = jep_Proxy_getPyObject(env, this->object);
+    jobject this = ((PyJObject*) self)->object;
+    jobject jpyObject = jep_Proxy_getPyObject(env, this);
     if (jpyObject) {
         return JPyObject_As_PyObject(env, jpyObject);
     } else if ((*env)->ExceptionCheck(env)) {
@@ -266,94 +167,89 @@ static PyObject* pyjproxy_As_PyObject(PyObject* self, PyObject* unused)
 
 static PyMethodDef pyjproxy_As_PyObject_def = { "_to_python", pyjproxy_As_PyObject, METH_NOARGS, "Unwrap a java Proxy."};
 
+/*
+ * Set the _to_python method for a type to a reference to an existing method.
+ * Very useful for the primitive wrapper types.
+ */
+int set_to_python_from_method(JNIEnv* env, jclass clazz,
+                              const char* methodName)
+{
+    PyObject* t = (PyObject*) PyJType_Get(env, clazz);
+    if (!t) {
+        return -1;
+    }
+    PyObject* a = PyObject_GetAttrString(t, methodName);
+    if (!a) {
+        Py_DECREF(t);
+        return -1;
+    }
+    int result = PyObject_SetAttrString(t, "_to_python", a);
+    Py_DECREF(a);
+    Py_DECREF(t);
+    return result;
+}
+
+int set_to_python_from_method_def(JNIEnv* env, jclass clazz,
+                                  PyMethodDef* methodDef)
+{
+    PyTypeObject* t = PyJType_Get(env, clazz);
+    if (!t) {
+        return -1;
+    }
+    PyObject* a = PyDescr_NewMethod(t, methodDef);
+    if (!a) {
+        Py_DECREF(t);
+        return -1;
+    }
+    int result = PyObject_SetAttrString((PyObject*) t, "_to_python", a);
+    Py_DECREF(a);
+    Py_DECREF(t);
+    return result;
+}
+
 int load_conversions(JNIEnv* env)
 {
-    // TODO Error checking and
-    PyObject* t = (PyObject*) PyJType_Get(env, JDOUBLE_OBJ_TYPE);
-    PyObject* a = PyObject_GetAttrString(t, "doubleValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
+    if (set_to_python_from_method(env, JDOUBLE_OBJ_TYPE, "doubleValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JFLOAT_OBJ_TYPE, "floatValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JBYTE_OBJ_TYPE, "byteValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JSHORT_OBJ_TYPE, "shortValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JINT_OBJ_TYPE, "intValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JLONG_OBJ_TYPE, "longValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JBOOL_OBJ_TYPE, "booleanValue")) {
+        return -1;
+    }
+    if (set_to_python_from_method(env, JCHAR_OBJ_TYPE, "charValue")) {
+        return -1;
+    }
 
-    t = (PyObject*) PyJType_Get(env, JFLOAT_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "floatValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JBYTE_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "byteValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JSHORT_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "shortValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JINT_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "intValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JLONG_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "longValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JBOOL_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "booleanValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    t = (PyObject*) PyJType_Get(env, JCHAR_OBJ_TYPE);
-    a = PyObject_GetAttrString(t, "charValue");
-    PyObject_SetAttrString(t, "_to_python", a);
-    Py_DECREF(t);
-    Py_DECREF(a);
-
-    PyTypeObject* type = PyJType_Get(env, JBIGINTEGER_TYPE);
-    a = PyDescr_NewMethod(type, &jbigint_As_PyLong_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
-
-    type = PyJType_Get(env, JSTRING_TYPE);
-    a = PyDescr_NewMethod(type, &pyjstring_As_PyString_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
-
-    type = PyJType_Get(env, JPYOBJECT_TYPE);
-    a = PyDescr_NewMethod(type, &pyjjpyobject_As_PyObject_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
-
-#if JEP_NUMPY_ENABLED
-    type = PyJType_Get(env, JEP_NDARRAY_TYPE);
-    a = PyDescr_NewMethod(type, &pyjndarray_As_PyNDArray_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
-
-    type = PyJType_Get(env, JEP_DNDARRAY_TYPE);
-    a = PyDescr_NewMethod(type, &pyjdndarray_As_PyNDArray_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
-#endif
-
-    type = PyJType_Get(env, JAVA_PROXY_TYPE);
-    a = PyDescr_NewMethod(type, &pyjproxy_As_PyObject_def);
-    PyObject_SetAttrString((PyObject*) type, "_to_python", a);
-    Py_DECREF(type);
-    Py_DECREF(a);
+    if (set_to_python_from_method_def(env, JBIGINTEGER_TYPE,
+                                      &jbigint_As_PyLong_def)) {
+        return -1;
+    }
+    if (set_to_python_from_method_def(env, JSTRING_TYPE,
+                                      &pyjstring_As_PyString_def)) {
+        return -1;
+    }
+    if (set_to_python_from_method_def(env, JPYOBJECT_TYPE,
+                                      &pyjjpyobject_As_PyObject_def)) {
+        return -1;
+    }
+    if (set_to_python_from_method_def(env, JAVA_PROXY_TYPE,
+                                      &pyjproxy_As_PyObject_def)) {
+        return -1;
+    }
 
     return 0;
 }

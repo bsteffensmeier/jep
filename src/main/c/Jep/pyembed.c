@@ -187,7 +187,18 @@ static int initjep(JNIEnv *env, jboolean hasSharedModules)
             Py_DECREF(modjep);
             return -1;
         }
-	load_conversions(env);
+        if (load_conversions(env)) {
+            Py_DECREF(javaTypeCache);
+            Py_DECREF(modjep);
+            return -1;
+        }
+#if JEP_NUMPY_ENABLED
+        if (load_numpy_conversions(env)) {
+            Py_DECREF(javaTypeCache);
+            Py_DECREF(modjep);
+            return -1;
+        }
+#endif
         if (hasSharedModules) {
             Py_INCREF(mainThreadModules);
             PyModule_AddObject(modjep, "mainInterpreterModules", mainThreadModules);

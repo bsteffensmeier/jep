@@ -65,6 +65,11 @@ PyObject* jstring_As_PyString(JNIEnv*, jstring);
  */
 PyObject* jobject_As_PyString(JNIEnv*, jobject);
 
+/*
+ * Set the _to_python method for a type to a method defined in a PyMethodDef
+ */
+int set_to_python_from_method_def(JNIEnv*, jclass, PyMethodDef*);
+
 int load_conversions(JNIEnv*);
 
 #endif // ifndef _Included_convert_j2p
