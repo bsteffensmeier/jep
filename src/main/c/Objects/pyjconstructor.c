@@ -118,7 +118,6 @@ static PyObject* pyjconstructor_call(PyJMethodObject *self, PyObject *args,
     JNIEnv        *env         = NULL;
     int            pos         = 0;
     jvalue        *jargs       = NULL;
-    int           foundArray   = 0; /* if params includes pyjarray instance */
     PyThreadState *_save       = NULL;
     jobject   obj  = NULL;
     PyObject *pobj = NULL;
@@ -166,10 +165,6 @@ static PyObject* pyjconstructor_call(PyJMethodObject *self, PyObject *args,
         }
 
         paramTypeId = get_jtype(env, paramType);
-        if (paramTypeId == JARRAY_ID) {
-            foundArray = 1;
-        }
-
         jargs[pos] = convert_pyarg_jvalue(env, param, paramType, paramTypeId, pos);
         if (PyErr_Occurred()) {
             goto EXIT_ERROR;
@@ -194,16 +189,6 @@ static PyObject* pyjconstructor_call(PyJMethodObject *self, PyObject *args,
     // we already closed the local frame, so make
     // sure to delete this local ref.
     PyMem_Free(jargs);
-
-    // re pin array if needed
-    if (foundArray) {
-        for (pos = 0; pos < self->lenParameters; pos++) {
-            PyObject *param = PyTuple_GetItem(args, pos);
-            if (param && pyjarray_check(param)) {
-                pyjarray_pin((PyJArrayObject *) param);
-            }
-        }
-    }
 
     (*env)->PopLocalFrame(env, NULL);
     return pobj;

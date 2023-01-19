@@ -92,12 +92,17 @@ class TestArray(unittest.TestCase):
         self.assertEqual(py_ar[0:2], list(ar[0:2]))
         self.assertEqual(py_ar[1:-1], list(ar[1:-1]))
 
-    def test_slice_with_step_not_1_throws_exception(self):
+    #def test_slice_with_step_not_1_throws_exception(self):
+    #    ar = jarray(10, JINT_ID, 0)
+    #    with self.assertRaises(TypeError):
+    #        ar[::-1]
+    #    with self.assertRaises(TypeError):
+    #        ar[::2]
+
+    def test_slice_with_step_not_1(self):
         ar = jarray(10, JINT_ID, 0)
-        with self.assertRaises(TypeError):
-            ar[::-1]
-        with self.assertRaises(TypeError):
-            ar[::2]
+        self.assertTrue(Arrays.equals(ar[::-1], ar))
+        self.assertTrue(Arrays.equals(ar[::2], jarray(5, JINT_ID, 0)))
 
     def test_slice_out_of_bounds_handled_cleanly(self):
         ar = jarray(10, JINT_ID, 0)
@@ -147,48 +152,48 @@ class TestArray(unittest.TestCase):
 
     def test_primitive_bool_array_creation(self):
         base = Array.newInstance(Boolean.TYPE, 1);
-        self.assertTrue(base, jarray(1, JBOOLEAN_ID))
-        self.assertTrue(base, jarray(1, 'z'))
-        self.assertTrue(base, jarray(1, Boolean.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JBOOLEAN_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'z')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Boolean.TYPE)))
 
     def test_primitive_byte_array_creation(self):
         base = Array.newInstance(Byte.TYPE, 1);
-        self.assertTrue(base, jarray(1, JBYTE_ID))
-        self.assertTrue(base, jarray(1, 'b'))
-        self.assertTrue(base, jarray(1, Byte.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JBYTE_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'b')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Byte.TYPE)))
 
     def test_primitive_char_array_creation(self):
         base = Array.newInstance(Character.TYPE, 1);
-        self.assertTrue(base, jarray(1, JCHAR_ID))
-        self.assertTrue(base, jarray(1, 'c'))
-        self.assertTrue(base, jarray(1, Character.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JCHAR_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'c')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Character.TYPE)))
 
     def test_primitive_short_array_creation(self):
         base = Array.newInstance(Short.TYPE, 1);
-        self.assertTrue(base, jarray(1, JSHORT_ID))
-        self.assertTrue(base, jarray(1, 's'))
-        self.assertTrue(base, jarray(1, Short.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JSHORT_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 's')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Short.TYPE)))
 
     def test_primitive_int_array_creation(self):
         base = Array.newInstance(Integer.TYPE, 1);
-        self.assertTrue(base, jarray(1, JINT_ID))
-        self.assertTrue(base, jarray(1, 'i'))
-        self.assertTrue(base, jarray(1, Integer.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JINT_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'i')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Integer.TYPE)))
 
     def test_primitive_long_array_creation(self):
         base = Array.newInstance(Long.TYPE, 1);
-        self.assertTrue(base, jarray(1, JLONG_ID))
-        self.assertTrue(base, jarray(1, 'j'))
-        self.assertTrue(base, jarray(1, Long.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JLONG_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'j')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Long.TYPE)))
 
     def test_primitive_float_array_creation(self):
         base = Array.newInstance(Float.TYPE, 1);
-        self.assertTrue(base, jarray(1, JFLOAT_ID))
-        self.assertTrue(base, jarray(1, 'f'))
-        self.assertTrue(base, jarray(1, Float.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JFLOAT_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'f')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Float.TYPE)))
 
     def test_primitive_double_array_creation(self):
         base = Array.newInstance(Double.TYPE, 1);
-        self.assertTrue(base, jarray(1, JDOUBLE_ID))
-        self.assertTrue(base, jarray(1, 'd'))
-        self.assertTrue(base, jarray(1, Double.TYPE))
+        self.assertTrue(Arrays.equals(base, jarray(1, JDOUBLE_ID)))
+        self.assertTrue(Arrays.equals(base, jarray(1, 'd')))
+        self.assertTrue(Arrays.equals(base, jarray(1, Double.TYPE)))

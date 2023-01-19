@@ -39,6 +39,7 @@
 
 #include "pyembed.h"
 #include "pyjarray.h"
+#include "pyjarray.h"
 #include "pyjbuffer.h"
 #include "pyjclass.h"
 #include "pyjcollection.h"

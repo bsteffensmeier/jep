@@ -84,6 +84,102 @@ static PyTypeObject* addSpecToTypeDict(JNIEnv *env, PyObject* fqnToPyType,
     return result;
 }
 
+static int addArrayTypesToTypeDict(JNIEnv *env, PyObject* fqnToPyType)
+{
+    PyTypeObject* booleanArrayType = PyJBooleanArray_InitType(env);
+    if (!booleanArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JBOOLEAN_ARRAY_TYPE,
+                                 booleanArrayType)) {
+	Py_DECREF(booleanArrayType);
+        return -1;
+    }
+    Py_DECREF(booleanArrayType);
+    PyTypeObject* byteArrayType = PyJByteArray_InitType(env);
+    if (!byteArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JBYTE_ARRAY_TYPE,
+                                 byteArrayType)) {
+	Py_DECREF(byteArrayType);
+        return -1;
+    }
+    Py_DECREF(byteArrayType);
+    PyTypeObject* charArrayType = PyJCharArray_InitType(env);
+    if (!charArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JCHAR_ARRAY_TYPE,
+                                 charArrayType)) {
+	Py_DECREF(charArrayType);
+        return -1;
+    }
+    Py_DECREF(charArrayType);
+    PyTypeObject* shortArrayType = PyJShortArray_InitType(env);
+    if (!shortArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JSHORT_ARRAY_TYPE,
+                                 shortArrayType)) {
+	Py_DECREF(shortArrayType);
+        return -1;
+    }
+    Py_DECREF(shortArrayType);
+    PyTypeObject* intArrayType = PyJIntArray_InitType(env);
+    if (!intArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JINT_ARRAY_TYPE,
+                                 intArrayType)) {
+	Py_DECREF(intArrayType);
+        return -1;
+    }
+    Py_DECREF(intArrayType);
+    PyTypeObject* longArrayType = PyJLongArray_InitType(env);
+    if (!longArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JLONG_ARRAY_TYPE,
+                                 longArrayType)) {
+	Py_DECREF(longArrayType);
+        return -1;
+    }
+    Py_DECREF(longArrayType);
+    PyTypeObject* floatArrayType = PyJFloatArray_InitType(env);
+    if (!floatArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JFLOAT_ARRAY_TYPE,
+                                 floatArrayType)) {
+	Py_DECREF(floatArrayType);
+        return -1;
+    }
+    Py_DECREF(floatArrayType);
+    PyTypeObject* doubleArrayType = PyJDoubleArray_InitType(env);
+    if (!doubleArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, JDOUBLE_ARRAY_TYPE,
+                                 doubleArrayType)) {
+	Py_DECREF(doubleArrayType);
+        return -1;
+    }
+    Py_DECREF(doubleArrayType);
+    jclass objectArrayClass = (*env)->FindClass(env, "[Ljava/lang/Object;");
+    PyTypeObject* objectArrayType = PyJObjectArray_InitType(env);
+    if (!objectArrayType) {
+        return -1;
+    }
+    if (!addCustomTypeToTypeDict(env, fqnToPyType, objectArrayClass,
+                                 objectArrayType)) {
+	Py_DECREF(objectArrayType);
+        return -1;
+    }
+    Py_DECREF(objectArrayType);
+    return 0;
+}
+
 /*
  * Populate the cache of types with the types that have custom logic defined
  * in c. We need to ensure that the inheritance tree is built in the correct
@@ -127,6 +223,7 @@ static int populateCustomTypeDict(JNIEnv *env, PyObject* fqnToPyType)
                            &PyJObject_Type)) {
         return -1;
     }
+    addArrayTypesToTypeDict(env, fqnToPyType);
     /* TODO In python 3.8 buffer protocol was added to spec so pybuffer type can use a spec */
     if (!addCustomTypeToTypeDict(env, fqnToPyType, JBUFFER_TYPE, &PyJBuffer_Type)) {
         return -1;
@@ -200,7 +297,11 @@ static PyObject* getBaseTypes(JNIEnv *env, PyObject *fqnToPyType, jclass clazz)
     if (interface != JNI_TRUE) {
         /* For classes that are not interfaces, the super class is the first type */
         jclass super = java_lang_Class_getSuperclass(env, clazz);
-        PyObject* superType = (PyObject*) pyjtype_get_cached(env, fqnToPyType, super);
+        if (java_lang_Class_isArray(env, clazz)){
+            // TODO this feels icky
+            super = (*env)->FindClass(env, "[Ljava/lang/Object;");
+        }
+	PyObject* superType = (PyObject*) pyjtype_get_cached(env, fqnToPyType, super);
         (*env)->DeleteLocalRef(env, super);
         if (!superType) {
             Py_DECREF(bases);

@@ -1,0 +1,344 @@
+/*
+   jep - Java Embedded Python
+
+   Copyright (c) 2004-2019 JEP AUTHORS.
+
+   This file is licensed under the the zlib/libpng License.
+
+   This software is provided 'as-is', without any express or implied
+   warranty. In no event will the authors be held liable for any
+   damages arising from the use of this software.
+
+   Permission is granted to anyone to use this software for any
+   purpose, including commercial applications, and to alter it and
+   redistribute it freely, subject to the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you
+   must not claim that you wrote the original software. If you use
+   this software in a product, an acknowledgment in the product
+   documentation would be appreciated but is not required.
+
+   2. Altered source versions must be plainly marked as such, and
+   must not be misrepresented as being the original software.
+
+   3. This notice may not be removed or altered from any source
+   distribution.
+
+
+   pyjarray is a python object for using java arrays within the interpreter.
+   i got a lot of inspiration from listobject.c in the Objects/ folder
+   of the python distribution.
+*/
+
+#include "Jep.h"
+
+typedef struct {
+    PyObject_HEAD
+    jsize index;
+    jbyteArray array;
+} PyJByteArrayIterObject;
+
+static void pyjbytearrayiter_dealloc(PyJByteArrayIterObject *o)
+{
+    JNIEnv *env = pyembed_get_env();
+    (*env)->DeleteGlobalRef(env, o->array);
+}
+
+static PyObject* pyjbytearrayiter_next(PyJByteArrayIterObject *o)
+{
+    JNIEnv *env = pyembed_get_env();
+    jsize length = (*env)->GetArrayLength(env, o->array);
+    if (o->index >= length) {
+        return NULL;
+    }
+
+    jbyte element;
+    (*env)->GetByteArrayRegion(env, o->array, o->index, 1, &element);
+    if (process_java_exception(env)) {
+        return NULL;
+    }
+    o->index += 1;
+    return jbyte_As_PyObject(element);
+}
+
+static PyType_Slot iter_slots[] = {
+    {Py_tp_doc, "Jep java byte array iterator"},
+    {Py_tp_dealloc, (void*) pyjbytearrayiter_dealloc},
+    {Py_tp_iter, (void*) PyObject_SelfIter},
+    {Py_tp_iternext, (void*) pyjbytearrayiter_next},
+    {0, NULL},
+};
+PyType_Spec PyJByteArrayIter_Spec = {
+    .name = "[B.iterator",
+    .basicsize = sizeof(PyJByteArrayIterObject),
+    .flags = Py_TPFLAGS_DEFAULT,
+    .slots = iter_slots,
+};
+
+static PyObject* pyjbytearray_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    static char *kwlist[] = {"size", NULL};
+    JNIEnv *env  = pyembed_get_env();
+    int len;
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "i", kwlist, &len)) {
+        return NULL;
+    }
+    jbyteArray n = (*env)->NewByteArray(env, len);
+    return PyJObject_New(env, type, n, JBYTE_ARRAY_TYPE);
+}
+
+static PyJByteArrayIterObject* pyjbytearray_getiter(PyJObject *a) {
+    JNIEnv *env  = pyembed_get_env();
+    // TODO making a new type to iterate is a terrible idea.
+    PyTypeObject* type = (PyTypeObject*) PyType_FromSpec(&PyJByteArrayIter_Spec);
+    PyJByteArrayIterObject *iter = (PyJByteArrayIterObject*) PyType_GenericAlloc(type, 0);
+    iter->index = 0;
+    iter->array = (*env)->NewGlobalRef(env, a->object);
+    return iter;
+}
+
+static Py_ssize_t pyjbytearray_length(PyJObject *o)
+{
+    JNIEnv *env  = pyembed_get_env();
+    return (*env)->GetArrayLength(env, o->object);
+}
+
+static PyObject* pyjbytearray_concat(PyJObject *a, PyObject *pb)
+{
+    if (Py_TYPE((PyObject*) a) != Py_TYPE(pb)) {
+        PyErr_Format(PyExc_TypeError,
+             "can only append byte[] (not \"%.200s\") to array",
+                 Py_TYPE(pb)->tp_name);
+        return NULL;
+    }
+    PyJObject* b = (PyJObject*) pb;
+    JNIEnv *env  = pyembed_get_env();
+    jsize a_len = (*env)->GetArrayLength(env, a->object);
+    jsize b_len = (*env)->GetArrayLength(env, b->object);
+    jsize n_len = a_len + b_len;
+    jbyteArray n = (*env)->NewByteArray(env, n_len);
+    if (n == NULL) {
+        process_java_exception(env);
+        return NULL;
+    }
+    if (a_len > 0) {
+        jbyte *a_data = (*env)->GetPrimitiveArrayCritical(env, a->object, 0);
+        (*env)->SetByteArrayRegion(env, n, 0, a_len, a_data);
+        (*env)->ReleasePrimitiveArrayCritical(env, a->object, a_data, JNI_ABORT);
+    }
+    if (b_len > 0) {
+        jbyte *b_data = (*env)->GetPrimitiveArrayCritical(env, b->object, 0);
+        (*env)->SetByteArrayRegion(env, n, a_len, b_len, b_data);
+        (*env)->ReleasePrimitiveArrayCritical(env, b->object, b_data, JNI_ABORT);
+    }
+    return PyJObject_New(env, Py_TYPE((PyObject*) a), n, JBYTE_ARRAY_TYPE);
+}
+
+static PyObject* pyjbytearray_repeat(PyJObject *o, Py_ssize_t n)
+{
+    JNIEnv *env  = pyembed_get_env();
+    jsize o_len = (*env)->GetArrayLength(env, o->object);
+    jsize n_len = o_len * n;
+    jbyteArray np = (*env)->NewByteArray(env, n_len);
+    jbyte *o_data = (*env)->GetPrimitiveArrayCritical(env, o->object, 0);
+
+    Py_ssize_t i;
+    for (i = 0; i < n_len; i += 1) {
+        (*env)->SetByteArrayRegion(env, o->object, i*o_len, o_len, o_data);
+    }
+
+    (*env)->ReleasePrimitiveArrayCritical(env, o->object, o_data, JNI_ABORT);
+    return PyJObject_New(env, Py_TYPE((PyObject*) o), np, JBYTE_ARRAY_TYPE);
+}
+
+static PyObject* pyjbytearray_item(PyJObject *o, Py_ssize_t i)
+{
+    JNIEnv *env = pyembed_get_env();
+    jbyte element;
+    (*env)->GetByteArrayRegion(env, o->object, i, 1, &element);
+    if (process_java_exception(env)) {
+        return NULL;
+    }
+    return jbyte_As_PyObject(element);
+}
+
+static int pyjbytearray_ass_item(PyJObject *o, Py_ssize_t i, PyObject *v)
+{
+    JNIEnv *env = pyembed_get_env();
+    jbyte element = PyObject_As_jbyte(v);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    (*env)->SetByteArrayRegion(env, o->object, i, 1, &element);
+    if (process_java_exception(env)) {
+        return -1;
+    }
+    return 0;
+}
+
+static int pyjbytearray_contains(PyJObject *o, PyObject *v)
+{
+    jbyte value = PyObject_As_jbyte(v);
+    if(value == -1 && PyErr_Occurred()) {
+        // TODO some errors just mean v isn't a byte, which should return 0
+        return -1;
+    }
+    int result = 0;
+    JNIEnv *env  = pyembed_get_env();
+    jsize len = (*env)->GetArrayLength(env, o->object);
+    jbyte *data = (*env)->GetPrimitiveArrayCritical(env, o->object, 0);
+
+    Py_ssize_t i;
+    for (i = 0; i < len; i += 1) {
+        if (data[i] == value) {
+            result = 1;
+            break;
+        }
+    }
+
+    (*env)->ReleasePrimitiveArrayCritical(env, o->object, data, JNI_ABORT);
+    return result; 
+}
+
+static PyObject* pyjbytearray_subscript(PyJObject* o, PyObject* index)
+{
+    if (PyIndex_Check(index)) {
+        Py_ssize_t i = PyNumber_AsSsize_t(index, PyExc_IndexError);
+        if (i==-1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        JNIEnv *env  = pyembed_get_env();
+        if (i < 0) {
+            i += (*env)->GetArrayLength(env, o->object);
+        }
+        jbyte element;
+        (*env)->GetByteArrayRegion(env, o->object, i, 1, &element);
+        if (process_java_exception(env)) {
+            return NULL;
+        }
+        return jbyte_As_PyObject(element);
+    } else if (PySlice_Check(index)) {
+        Py_ssize_t start, stop, step, slicelength, cur, i;
+        jbyteArray result;
+
+        if (PySlice_Unpack(index, &start, &stop, &step) < 0) {
+            return NULL;
+        }
+        JNIEnv *env  = pyembed_get_env();
+        jsize len = (*env)->GetArrayLength(env, o->object);
+        slicelength = PySlice_AdjustIndices(len, &start, &stop, step);
+        result = (*env)->NewByteArray(env, slicelength);
+        if (result == NULL){
+            process_java_exception(env);
+            return NULL;
+        }
+
+        if (slicelength <= 0) {
+            // Don't need to copy any data
+        } else if (step == 1) {
+            jbyte *data = (*env)->GetPrimitiveArrayCritical(env, result, JNI_FALSE);
+	    (*env)->GetByteArrayRegion(env, o->object, start, slicelength, data);
+            (*env)->ReleasePrimitiveArrayCritical(env, result, data, JNI_COMMIT);
+        } else {
+            jbyte *data = (*env)->GetPrimitiveArrayCritical(env, result, 0);
+
+            for (cur = start, i = 0; i < slicelength;
+                 cur += step, i++) {
+	        (*env)->GetByteArrayRegion(env, o->object, cur, 1, data + i);
+            }
+            (*env)->ReleasePrimitiveArrayCritical(env, result, data, JNI_COMMIT);
+        }
+        return PyJObject_New(env, Py_TYPE((PyObject*) o), result, JBYTE_ARRAY_TYPE);
+    } else {
+        PyErr_Format(PyExc_TypeError,
+                     "PyJByteArray indices must be integers or slices, not %.200s",
+                      Py_TYPE(index)->tp_name);
+        return NULL;
+    }
+}
+
+static int pyjbytearray_ass_subscript(PyJObject* o, PyObject* index, PyObject* values)
+{
+    if (PyIndex_Check(index)) {
+        Py_ssize_t i = PyNumber_AsSsize_t(index, PyExc_IndexError);
+        if (i==-1 && PyErr_Occurred()) {
+            return -1;
+        }
+        JNIEnv *env  = pyembed_get_env();
+        if (i < 0) {
+            i += (*env)->GetArrayLength(env, o->object);
+        }
+        jbyte element = PyObject_As_jbyte(values);
+        if (PyErr_Occurred()) {
+            return -1;
+        }
+        (*env)->SetByteArrayRegion(env, o->object, i, 1, &element);
+        if (process_java_exception(env)) {
+            return -1;
+        }
+        return 0;
+    } else if (PySlice_Check(index)) {
+        Py_ssize_t start, stop, step, slicelength, cur, i;
+
+        if (PySlice_Unpack(index, &start, &stop, &step) < 0) {
+            return -1;
+        }
+        JNIEnv *env  = pyembed_get_env();
+        jsize len = (*env)->GetArrayLength(env, o->object);
+        slicelength = PySlice_AdjustIndices(len, &start, &stop, step);
+
+        if (!PySequence_Check(values)) {
+            PyErr_Format(PyExc_TypeError,
+                         "PyJByteArray can only slice assign a sequence");
+            return -1;
+        }
+
+        if (slicelength != PySequence_Size(values)) {
+            PyErr_Format(PyExc_TypeError,
+                         "PyJByteArray can only slice assign a sequence of matching length");
+            return -1;
+
+        }
+
+        if (slicelength > 0 ) {
+            for (cur = start, i = 0; i < slicelength;
+                cur += step, i++) {
+                PyObject* item = PySequence_GetItem(values, i);
+                jbyte element = PyObject_As_jbyte(item);
+	        (*env)->SetByteArrayRegion(env, o->object, cur, 1, &element);
+            }
+        }
+        return 0;
+    } else {
+        PyErr_Format(PyExc_TypeError,
+                     "PyJByteArray indices must be integers or slices, not %.200s",
+                      Py_TYPE(index)->tp_name);
+        return -1;
+    }
+}
+
+static PyType_Slot slots[] = {
+    {Py_tp_doc, "Jep java byte array"},
+    {Py_tp_new, (void*) pyjbytearray_new},
+    {Py_tp_iter, (void*) pyjbytearray_getiter},
+    /*
+     * **** sequence slots ****
+     */
+    {Py_sq_length, (void*) pyjbytearray_length},
+    {Py_sq_contains, (void*) pyjbytearray_contains},
+    {Py_sq_concat, (void*) pyjbytearray_concat},
+    {Py_sq_repeat, (void*) pyjbytearray_repeat},
+    {Py_sq_item, (void*) pyjbytearray_item},
+    {Py_sq_ass_item, (void*) pyjbytearray_ass_item},
+    // mapping methods
+    {Py_mp_subscript, (void*) pyjbytearray_subscript},
+    {Py_mp_ass_subscript, (void*) pyjbytearray_ass_subscript},
+    {0, NULL},
+};
+PyType_Spec PyJByteArray_Spec = {
+    .name = "[B",
+    .basicsize = 0,
+    .flags = Py_TPFLAGS_DEFAULT,
+    .slots = slots,
+};
+

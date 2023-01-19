@@ -1,7 +1,7 @@
 /*
    jep - Java Embedded Python
 
-   Copyright (c) 2004-2022 JEP AUTHORS.
+   Copyright (c) 2023 JEP AUTHORS.
 
    This file is licensed under the the zlib/libpng License.
 
@@ -23,25 +23,30 @@
 
    3. This notice may not be removed or altered from any source
    distribution.
+
+   Defines the python type for the java float primitive array.
+   This does not define any code, just sets the correct macros
+   for the pyjprimitivearray template.
 */
 
-#include "jep_platform.h"
-#include "pyjobject.h"
+#define PyJPrimitiveArray_InitType PyJFloatArray_InitType
 
-#ifndef _Included_pyjarray
-#define _Included_pyjarray
+#define ARRAY_TP_NAME "[F"
+#define ARRAY_TP_DOC "Jep java float array"
 
-PyTypeObject* PyJBooleanArray_InitType(JNIEnv*);
-PyTypeObject* PyJByteArray_InitType(JNIEnv*);
-PyTypeObject* PyJCharArray_InitType(JNIEnv*);
-PyTypeObject* PyJShortArray_InitType(JNIEnv*);
-PyTypeObject* PyJIntArray_InitType(JNIEnv*);
-PyTypeObject* PyJLongArray_InitType(JNIEnv*);
-PyTypeObject* PyJFloatArray_InitType(JNIEnv*);
-PyTypeObject* PyJDoubleArray_InitType(JNIEnv*);
-PyTypeObject* PyJObjectArray_InitType(JNIEnv*);
+#define jprimitive jfloat
+#define jprimitiveArray jfloatArray
 
-PyObject* pyjarray_new(JNIEnv*, jobjectArray);
-PyObject* pyjarray_new_v(PyObject*, PyObject*);
+#define JPRIMITIVE_ARRAY_TYPE JFLOAT_ARRAY_TYPE
 
-#endif // ndef pyjarray
+#define jprimitive_As_PyObject jfloat_As_PyObject
+#define PyObject_As_jprimitive PyObject_As_jfloat
+
+#define NewPrimitiveArray NewFloatArray
+#define GetPrimitiveArrayElements GetFloatArrayElements
+#define ReleasePrimitiveArrayElements ReleaseFloatArrayElements
+#define GetPrimitiveArrayRegion GetFloatArrayRegion
+#define SetPrimitiveArrayRegion SetFloatArrayRegion
+
+#include "pyjprimitivearray_template.c"
+

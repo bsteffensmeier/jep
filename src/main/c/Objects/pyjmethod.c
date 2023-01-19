@@ -218,8 +218,6 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
     PyObject      *result           = NULL;
     int            pos              = 0;
     jvalue        *jargs            = NULL;
-    /* if params includes pyjarray instance */
-    int            foundArray       = 0;
 
     if (keywords != NULL && PyDict_Size(keywords) > 0) {
         PyErr_Format(PyExc_RuntimeError, "Keywords are not supported.");
@@ -291,10 +289,6 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
         }
 
         paramTypeId = get_jtype(env, paramType);
-        if (paramTypeId == JARRAY_ID) {
-            foundArray = 1;
-        }
-
         jargs[pos] = convert_pyarg_jvalue(env, param, paramType, paramTypeId, pos);
         if (PyErr_Occurred()) {
             if (pos == (lenJArgsExpected - 1)
@@ -752,16 +746,6 @@ static PyObject* pyjmethod_call(PyJMethodObject *self,
 
     if (PyErr_Occurred()) {
         return NULL;
-    }
-
-    // re pin array objects if needed
-    if (foundArray) {
-        for (pos = 0; pos < lenJArgsNormal; pos++) {
-            PyObject *param = PyTuple_GetItem(args, pos + 1);     /* borrowed */
-            if (param && pyjarray_check(param)) {
-                pyjarray_pin((PyJArrayObject *) param);
-            }
-        }
     }
 
     if (result == NULL) {
