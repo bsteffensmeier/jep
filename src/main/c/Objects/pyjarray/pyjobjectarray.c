@@ -37,50 +37,6 @@
 
 #include "Jep.h"
 
-typedef struct {
-    PyObject_HEAD
-    jsize index;
-    jobjectArray array;
-} pyjobjectarray_iter_object;
-
-static void pyjobjectarray_iter_dealloc(pyjobjectarray_iter_object *o)
-{
-    JNIEnv *env = pyembed_get_env();
-    (*env)->DeleteGlobalRef(env, o->array);
-}
-
-static PyObject* pyjobjectarray_iter_next(pyjobjectarray_iter_object *o)
-{
-    JNIEnv *env = pyembed_get_env();
-    jsize length = (*env)->GetArrayLength(env, o->array);
-    if (o->index >= length) {
-        return NULL;
-    }
-
-    jobject element = (*env)->GetObjectArrayElement(env, o->array, o->index);
-    if (process_java_exception(env)) {
-        return NULL;
-    }
-    o->index += 1;
-    PyObject* result = jobject_As_PyObject(env, element);
-    (*env)->DeleteLocalRef(env, element);
-    return result;
-}
-
-static PyType_Slot pyjobjectarray_iter_slots[] = {
-    {Py_tp_doc, "Jep java object array iterator"},
-    {Py_tp_dealloc, (void*) pyjobjectarray_iter_dealloc},
-    {Py_tp_iter, (void*) PyObject_SelfIter},
-    {Py_tp_iternext, (void*) pyjobjectarray_iter_next},
-    {0, NULL},
-};
-PyType_Spec pyjobjectarray_iter_spec = {
-    .name = "[java.lang.Object.iterator",
-    .basicsize = sizeof(pyjobjectarray_iter_object),
-    .flags = Py_TPFLAGS_DEFAULT,
-    .slots = pyjobjectarray_iter_slots,
-};
-
 static PyObject* pyjobjectarray_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     // TODO add args for elementClass and initialElement
@@ -99,18 +55,6 @@ static PyObject* pyjobjectarray_new(PyTypeObject *type, PyObject *args, PyObject
     return PyJObject_New(env, type, n, NULL);
 }
 
-static pyjobjectarray_iter_object* pyjobjectarray_getiter(PyJObject *a) {
-    JNIEnv *env  = pyembed_get_env();
-    PyObject *type = (PyObject*) Py_TYPE(a);
-    PyTypeObject* itertype = (PyTypeObject*) PyObject_GetAttrString(type, "__itertype__");
-    pyjobjectarray_iter_object *iter = PyObject_New(pyjobjectarray_iter_object, itertype);
-    if (iter) {
-        iter->array = (*env)->NewGlobalRef(env, a->object);
-        iter->index = 0;
-    }
-    return iter;
-}
-
 static Py_ssize_t pyjobjectarray_length(PyJObject *o)
 {
     JNIEnv *env  = pyembed_get_env();
@@ -119,41 +63,60 @@ static Py_ssize_t pyjobjectarray_length(PyJObject *o)
 
 static PyObject* pyjobjectarray_concat(PyJObject *a, PyObject *pb)
 {
-    if (Py_TYPE((PyObject*) a) != Py_TYPE(pb)) {
+    if (!PyJObject_Check(pb)){
         PyErr_Format(PyExc_TypeError,
-             "can only append array of same type (not \"%.200s\")",
-                 Py_TYPE(pb)->tp_name);
+             "can only append jobjectarray (not \"%.200s\")", Py_TYPE(pb)->tp_name);
         return NULL;
     }
-    PyJObject* b = (PyJObject*) pb;
     JNIEnv *env  = pyembed_get_env();
+    PyJObject* b = (PyJObject*) pb;
+    if (!(*env)->IsAssignableFrom(env, b->clazz, JOBJECT_ARRAY_TYPE)) {
+        PyErr_Format(PyExc_TypeError,
+             "can only append jobjectarray (not \"%.200s\")", Py_TYPE(pb)->tp_name);
+        return NULL;
+    }
     jsize a_len = (*env)->GetArrayLength(env, a->object);
     jsize b_len = (*env)->GetArrayLength(env, b->object);
     jsize n_len = a_len + b_len;
-    // TODO JOBJECT_TYPE
-    // TODO Arrays.copyOf or System.arraycopy?
-    jobjectArray n = (*env)->NewObjectArray(env, n_len, JOBJECT_TYPE, NULL);
+    PyTypeObject* n_type;
+    jobjectArray n;
+    if ((*env)->IsAssignableFrom(env, b->clazz, a->clazz)) {
+        jclass compClazz = java_lang_Class_getComponentType(env, a->clazz);
+        n = (*env)->NewObjectArray(env, n_len, compClazz, NULL);
+        n_type = Py_TYPE((PyObject*) a);
+        Py_INCREF(n_type);
+        (*env)->DeleteLocalRef(env, compClazz);
+    } else if ((*env)->IsAssignableFrom(env, a->clazz, b->clazz)) {
+        jclass compClazz = java_lang_Class_getComponentType(env, b->clazz);
+        n = (*env)->NewObjectArray(env, n_len, compClazz, NULL);
+        n_type = Py_TYPE((PyObject*) b);
+        Py_INCREF(n_type);
+        (*env)->DeleteLocalRef(env, compClazz);
+    } else {
+        n_type = PyJType_Get(env, JOBJECT_ARRAY_TYPE);
+        if (!n_type) {
+            return NULL;
+        }
+        n = (*env)->NewObjectArray(env, n_len, JOBJECT_TYPE, NULL);
+    }
     if (n == NULL) {
         process_java_exception(env);
         return NULL;
     }
-    if (a_len > 0) {
-        Py_ssize_t i;
-        for (i = 0; i < a_len; i += 1) {
-            jobject element = (*env)->GetObjectArrayElement(env, a->object, i);
-            (*env)->SetObjectArrayElement(env, n, i, element);
-            (*env)->DeleteLocalRef(env, element);
-        }
+    Py_ssize_t i;
+    for (i = 0; i < a_len; i += 1) {
+        jobject element = (*env)->GetObjectArrayElement(env, a->object, i);
+        (*env)->SetObjectArrayElement(env, n, i, element);
+        (*env)->DeleteLocalRef(env, element);
     }
-    if (b_len > 0) {
-        Py_ssize_t i;
-        for (i = 0; i < a_len; i += 1) {
-            jobject element = (*env)->GetObjectArrayElement(env, b->object, i);
-            (*env)->SetObjectArrayElement(env, n, a_len + i, element);
-            (*env)->DeleteLocalRef(env, element);
-        }
+    for (i = 0; i < b_len; i += 1) {
+        jobject element = (*env)->GetObjectArrayElement(env, b->object, i);
+        (*env)->SetObjectArrayElement(env, n, a_len + i, element);
+        (*env)->DeleteLocalRef(env, element);
     }
-    return PyJObject_New(env, Py_TYPE((PyObject*) a), n, a->clazz);
+    PyObject* result = PyJObject_New(env, n_type, n, a->clazz);
+    Py_DECREF(n_type);
+    return result;
 }
 
 static PyObject* pyjobjectarray_repeat(PyJObject *o, Py_ssize_t n)
@@ -163,6 +126,7 @@ static PyObject* pyjobjectarray_repeat(PyJObject *o, Py_ssize_t n)
     jsize n_len = o_len * n;
     jclass compClazz = java_lang_Class_getComponentType(env, o->clazz);
     jobjectArray np = (*env)->NewObjectArray(env, n_len, compClazz, NULL);
+    (*env)->DeleteLocalRef(env, compClazz);
     if (np == NULL) {
         process_java_exception(env);
         return NULL;
@@ -199,6 +163,7 @@ static int pyjobjectarray_ass_item(PyJObject *o, Py_ssize_t i, PyObject *v)
     JNIEnv *env = pyembed_get_env();
     jclass compClazz = java_lang_Class_getComponentType(env, o->clazz);
     jobject element = PyObject_As_jobject(env, v, compClazz);
+    (*env)->DeleteLocalRef(env, compClazz);
     if (PyErr_Occurred()) {
         return -1;
     }
@@ -215,6 +180,7 @@ static int pyjobjectarray_contains(PyJObject *o, PyObject *v)
     JNIEnv *env = pyembed_get_env();
     jclass compClazz = java_lang_Class_getComponentType(env, o->clazz);
     jobject value = PyObject_As_jobject(env, v, compClazz);
+    (*env)->DeleteLocalRef(env, compClazz);
     if(PyErr_Occurred()) {
         /* 
 	 * Objects that can't be converted to the java
@@ -275,6 +241,7 @@ static PyObject* pyjobjectarray_subscript(PyJObject* o, PyObject* index)
         jsize len = (*env)->GetArrayLength(env, o->object);
         slicelength = PySlice_AdjustIndices(len, &start, &stop, step);
         result = (*env)->NewObjectArray(env, slicelength, compClazz, NULL);
+        (*env)->DeleteLocalRef(env, compClazz);
         if (result == NULL){
             process_java_exception(env);
             return NULL;
@@ -307,6 +274,7 @@ static int pyjobjectarray_ass_subscript(PyJObject* o, PyObject* index, PyObject*
         }
         jclass compClazz = java_lang_Class_getComponentType(env, o->clazz);
         jobject element = PyObject_As_jobject(env, values, compClazz);
+        (*env)->DeleteLocalRef(env, compClazz);
         if (PyErr_Occurred()) {
             return -1;
         }
@@ -348,6 +316,7 @@ static int pyjobjectarray_ass_subscript(PyJObject* o, PyObject* index, PyObject*
             (*env)->SetObjectArrayElement(env, o->object, cur, element);
             (*env)->DeleteLocalRef(env, element);
         }
+        (*env)->DeleteLocalRef(env, compClazz);
         return 0;
     } else {
         PyErr_Format(PyExc_TypeError,
@@ -360,7 +329,6 @@ static int pyjobjectarray_ass_subscript(PyJObject* o, PyObject* index, PyObject*
 static PyType_Slot pyjobjectarray_slots[] = {
     {Py_tp_doc, "Jep java object array"},
     {Py_tp_new, (void*) pyjobjectarray_new},
-    {Py_tp_iter, (void*) pyjobjectarray_getiter},
     /*
      * **** sequence slots ****
      */
@@ -382,25 +350,29 @@ static PyType_Spec pyjobjectarray_spec = {
     .slots = pyjobjectarray_slots,
 };
 
-PyTypeObject* PyJObjectArray_InitType(JNIEnv *env) {
-    /* TODO Starting in 3.10 bases can be a single type so there will be no need to make a tuple. */
-    PyObject *bases = PyTuple_Pack(1, (PyObject*) &PyJObject_Type);
+PyTypeObject* PyJObjectArray_InitType(JNIEnv *env) 
+{
+    PyObject* collectionAbc = PyImport_ImportModule("collections.abc");
+    if (!collectionAbc) {
+        return NULL;
+    }
+    PyObject* seq = PyObject_GetAttrString(collectionAbc, "Sequence");
+    Py_DECREF(collectionAbc);
+    if (!seq) {
+        return NULL;
+    }
+    if (!PyType_Check(seq)) {
+        Py_DECREF(seq);
+        return NULL;
+    }
+    PyObject *bases = PyTuple_Pack(2, (PyObject*) &PyJObject_Type, seq);
+    Py_DECREF(seq);
     if (!bases) {
         return NULL;
     }
     PyObject *type = PyType_FromSpecWithBases(&pyjobjectarray_spec, bases);
     Py_DECREF(bases);
     if (!type) {
-        return NULL;
-    }
-    PyObject* iterType = PyType_FromSpec(&pyjobjectarray_iter_spec);
-    if (!iterType) {
-        Py_DECREF(type);
-        return NULL;
-    }
-    if (PyObject_SetAttrString((PyObject*) type, "__itertype__", iterType)) {
-        Py_DECREF(type);
-        Py_DECREF(iterType);
         return NULL;
     }
     return (PyTypeObject*) type;

@@ -104,6 +104,7 @@ extern jclass JDOUBLE_ARRAY_TYPE;
  */
 #define CLASS_TABLE(F) \
     F(JOBJECT_TYPE, "java/lang/Object") \
+    F(JOBJECT_ARRAY_TYPE, "[Ljava/lang/Object;") \
     F(JSTRING_TYPE, "java/lang/String") \
     F(JCLASS_TYPE, "java/lang/Class") \
     F(JLIST_TYPE, "java/util/List") \
